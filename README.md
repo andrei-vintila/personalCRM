@@ -86,6 +86,63 @@ The first sync runs from the Settings page and goes back `SYNC_BACKFILL_DAYS` (d
 
 OAuth tokens are encrypted in the database with a key derived from `GOOGLE_CLIENT_SECRET`. Disconnecting an account revokes the grant but keeps everything already synced.
 
+## API tokens
+
+**Settings → API tokens** creates tokens for programmatic access. Send them as `Authorization: Bearer crm_…` to any `/api/*` route or to `/mcp`. Only a SHA-256 hash is stored, and each token is shown once. Tokens can't create or revoke tokens; that needs a signed-in browser session.
+
+## AI assistants (MCP)
+
+`/mcp` is an [MCP](https://modelcontextprotocol.io) server (Streamable HTTP, stateless, JSON responses) that works on Node and Workers alike. Its tools:
+
+- **Read:** `search_contacts`, `get_contact`, `search_interactions`, `list_reminders`, `reconnect_suggestions`, `crm_overview`
+- **Write:** `create_contact`, `update_contact`, `log_interaction`, `create_reminder`, `complete_reminder`
+
+There is deliberately no delete tool.
+
+```bash
+# Claude Code
+claude mcp add --transport http personal-crm https://crm.example.com/mcp --header "Authorization: Bearer crm_…"
+```
+
+Claude Desktop and other clients that expect a local command can use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote); Settings shows the exact config. Clients that require OAuth for remote servers aren't supported yet.
+
+## Phone calls and WhatsApp (Mac connector)
+
+Call history and WhatsApp chats only exist on your devices, so `connector/mac-sync.ts` reads them on your Mac and pushes timeline entries to `/api/import/interactions` with an API token. It works the same against a VM or Cloudflare deployment.
+
+- **Calls:** answered Phone, FaceTime and CallKit calls (e.g. WhatsApp voice) from `~/Library/Application Support/CallHistoryDB`, which includes iPhone calls when "Calls on other devices" is on. Missed calls are skipped. Callers that are in your Mac contacts become CRM contacts; unknown numbers only link to people you already have.
+- **WhatsApp:** from the WhatsApp Mac app's local store. One entry per chat per day ("WhatsApp · 3 messages"), **metadata only, never message text**. People you wrote to become contacts; group members and inbound-only chats only link to existing contacts.
+- **Matching:** phone numbers match across formats (`+40 712…` and `0712…` by their last 9 digits, when exactly one contact matches).
+
+```bash
+npm run connector -- --dry-run                       # summary only, nothing sent
+CRM_URL=https://crm.example.com CRM_TOKEN=crm_… npm run connector
+```
+
+It needs **Full Disk Access** for whatever runs it (your terminal app, or `node` under launchd). Progress is kept in `~/.config/personal-crm/connector.json`, so each run sends only what's new (the first run goes back `--since-days`, default 180). It reads copies of the databases and never modifies them.
+
+To run it every 30 minutes, save this as `~/Library/LaunchAgents/com.personal-crm.connector.plist`, then run `launchctl load` on that file:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.personal-crm.connector</string>
+  <key>ProgramArguments</key><array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/path/to/personalCRM/connector/mac-sync.ts</string>
+  </array>
+  <key>EnvironmentVariables</key><dict>
+    <key>CRM_URL</key><string>https://crm.example.com</string>
+    <key>CRM_TOKEN</key><string>crm_…</string>
+  </dict>
+  <key>StartInterval</key><integer>1800</integer>
+  <key>StandardErrorPath</key><string>/tmp/personal-crm-connector.log</string>
+</dict></plist>
+```
+
+Under launchd, grant Full Disk Access to the `node` binary itself.
+
 ## Database changes
 
 Edit `server/db/schema.ts`, then:
@@ -111,6 +168,9 @@ server/
   utils/merge.ts      Atomic contact merge
   utils/google/       OAuth client and resumable sync steps
   tasks/              Scheduled jobs (Google sync, duplicate scan)
+  routes/mcp.ts       MCP endpoint (tools in utils/mcpServer.ts)
+connector/
+  mac-sync.ts         Mac connector: call history and WhatsApp → CRM
 src/
   pages/              Home, Contacts, ContactDetail, Reminders, Import
   lib/importers.ts    LinkedIn / Google / generic CSV → contacts (parsed in the browser)

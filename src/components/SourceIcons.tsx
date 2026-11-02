@@ -1,4 +1,4 @@
-import { BookUser, CalendarDays, Database, FileSpreadsheet, Mail, PenLine, Phone, type LucideIcon } from "lucide-react";
+import { BookUser, CalendarDays, Database, FileSpreadsheet, Mail, MessageCircle, PenLine, Phone, type LucideIcon } from "lucide-react";
 import { cx } from "./ui";
 
 const sourceMeta: Record<string, { label: string; icon: LucideIcon | "linkedin" }> = {
@@ -8,6 +8,7 @@ const sourceMeta: Record<string, { label: string; icon: LucideIcon | "linkedin" 
   gcal: { label: "Google Calendar", icon: CalendarDays },
   linkedin: { label: "LinkedIn", icon: "linkedin" },
   calls: { label: "Calls", icon: Phone },
+  whatsapp: { label: "WhatsApp", icon: MessageCircle },
   generic: { label: "CSV import", icon: FileSpreadsheet },
 };
 

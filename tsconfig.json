@@ -14,5 +14,5 @@
     "resolveJsonModule": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["src", "server", "vite.config.ts", "drizzle.config.ts"]
+  "include": ["src", "server", "connector", "vite.config.ts", "drizzle.config.ts"]
 }

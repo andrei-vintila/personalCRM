@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, like, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, like, or, sql, type SQL } from "drizzle-orm";
 import { HTTPError } from "nitro/h3";
 import {
   contactIdentities,
@@ -9,6 +9,7 @@ import {
   reminders,
   tags,
   type IdentityKind,
+  type InteractionType,
 } from "../db/schema";
 import { chunk, type DB } from "./db";
 import { normalizeIdentity } from "./identity";
@@ -22,7 +23,7 @@ export type ContactFilter = "all" | "starred" | "reconnect" | "archived";
  * "generic" CSV, "manual", ...) and interaction sources ("gmail", "gcal") come from the
  * data; "calls" and "linkedin" are also inferred from call entries and LinkedIn profiles.
  */
-const SOURCE_ORDER = ["manual", "google", "gmail", "gcal", "linkedin", "calls", "generic"];
+const SOURCE_ORDER = ["manual", "google", "gmail", "gcal", "linkedin", "calls", "whatsapp", "generic"];
 
 /**
  * SQL columns that summarize a contact's sources. Usable in select() and as relational
@@ -150,11 +151,23 @@ export async function getContactDetail(db: DB, id: string) {
   };
 }
 
-export async function listInteractions(db: DB, opts: { contactId?: string; limit?: number }) {
+export async function listInteractions(
+  db: DB,
+  opts: { contactId?: string; query?: string; type?: InteractionType; since?: Date; limit?: number },
+) {
+  const where: SQL[] = [];
+  if (opts.contactId) {
+    where.push(sql`exists (select 1 from interaction_contacts ic where ic.interaction_id = ${interactions.id} and ic.contact_id = ${opts.contactId})`);
+  }
+  if (opts.query?.trim()) {
+    const pattern = `%${opts.query.trim().replace(/[%_]/g, "")}%`;
+    where.push(or(like(interactions.title, pattern), like(interactions.body, pattern))!);
+  }
+  if (opts.type) where.push(eq(interactions.type, opts.type));
+  if (opts.since) where.push(gte(interactions.occurredAt, opts.since));
+
   const rows = await db.query.interactions.findMany({
-    where: opts.contactId
-      ? sql`exists (select 1 from interaction_contacts ic where ic.interaction_id = ${interactions.id} and ic.contact_id = ${opts.contactId})`
-      : undefined,
+    where: where.length ? and(...where) : undefined,
     orderBy: [desc(interactions.occurredAt)],
     limit: opts.limit ?? 50,
     with: { contacts: { with: { contact: { columns: { id: true, name: true, avatarUrl: true } } } } },

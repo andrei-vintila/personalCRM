@@ -143,6 +143,20 @@ export const duplicateDismissals = sqliteTable(
   (t) => [primaryKey({ columns: [t.contactA, t.contactB] })],
 );
 
+/**
+ * API tokens for programmatic access (MCP clients, the Mac connector, scripts).
+ * Only a SHA-256 hash is stored; the token itself is shown once at creation.
+ */
+export const apiTokens = sqliteTable("api_tokens", {
+  id: id(),
+  name: text("name").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  /** First characters of the token, to tell tokens apart in the UI */
+  prefix: text("prefix").notNull(),
+  createdAt: createdAt(),
+  lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+});
+
 /** Latest duplicate scan results (replaced as a whole by each scan); contactA < contactB. */
 export const duplicateCandidates = sqliteTable(
   "duplicate_candidates",

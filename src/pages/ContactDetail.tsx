@@ -39,7 +39,7 @@ const interactionMeta: Record<InteractionType, { label: string; icon: typeof Sti
   other: { label: "Other", icon: Calendar },
 };
 
-const sourceLabels: Record<string, string> = { gmail: "Gmail", gcal: "Calendar" };
+const sourceLabels: Record<string, string> = { gmail: "Gmail", gcal: "Calendar", calls: "Phone", whatsapp: "WhatsApp" };
 
 const identityIcons: Record<IdentityKind, typeof Mail> = {
   email: Mail,

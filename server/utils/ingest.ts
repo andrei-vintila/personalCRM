@@ -41,8 +41,16 @@ export async function importContacts(db: DB, opts: { source: string; tag?: strin
   const matched = new Map<string, (typeof prepared)[number]>();
   const touched = new Set<string>();
 
+  // Phones stored in another format (0712… vs +40712…) still identify the same person.
+  const phoneOwners = await lookupPhoneOwnersBySuffix(
+    db,
+    prepared.flatMap((r) => r.identities.filter((i) => i.kind === "phone" && !owners.has(`phone:${i.value}`)).map((i) => i.value)),
+  );
+
   for (const row of prepared) {
-    let contactId = row.identities.map((i) => owners.get(`${i.kind}:${i.value}`)).find(Boolean);
+    let contactId =
+      row.identities.map((i) => owners.get(`${i.kind}:${i.value}`)).find(Boolean) ??
+      row.identities.filter((i) => i.kind === "phone").map((i) => phoneOwners.get(phoneSuffix(i.value) ?? "")).find(Boolean);
     if (contactId) {
       matched.set(contactId, row);
     } else {
@@ -126,6 +134,14 @@ export async function resolveParticipants(db: DB, participants: Participant[], s
     db,
     [...byKey.values()].map((p) => p.value),
   );
+  const phoneOwners = await lookupPhoneOwnersBySuffix(
+    db,
+    [...byKey.entries()].filter(([key, p]) => p.kind === "phone" && !result.has(key)).map(([, p]) => p.value),
+  );
+  for (const [key, p] of byKey) {
+    const owner = p.kind === "phone" && !result.has(key) ? phoneOwners.get(phoneSuffix(p.value) ?? "") : undefined;
+    if (owner) result.set(key, owner);
+  }
   const toCreate: IncomingContact[] = [];
   for (const [key, p] of byKey) {
     if (result.has(key) || !p.create) continue;
@@ -225,6 +241,32 @@ async function lookupIdentityOwners(db: DB, values: string[], kind?: IdentityKin
       .where(kind ? and(eq(contactIdentities.kind, kind), inArray(contactIdentities.value, batch)) : inArray(contactIdentities.value, batch));
     for (const f of found) owners.set(`${f.kind}:${f.value}`, f.contactId);
   }
+  return owners;
+}
+
+/** Last 9 digits: the same across national (0712…) and international (+40712…) formats. */
+export function phoneSuffix(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 9 ? digits.slice(-9) : null;
+}
+
+/** Finds contacts by phone suffix; suffixes shared by several contacts are ambiguous and skipped. */
+async function lookupPhoneOwnersBySuffix(db: DB, phones: string[]) {
+  const suffixes = [...new Set(phones.map(phoneSuffix).filter((s): s is string => s !== null))];
+  const owners = new Map<string, string>();
+  const ambiguous = new Set<string>();
+  for (const batch of chunk(suffixes, 90)) {
+    const found = await db
+      .select({ value: contactIdentities.value, contactId: contactIdentities.contactId })
+      .from(contactIdentities)
+      .where(and(eq(contactIdentities.kind, "phone"), inArray(sql`substr(${contactIdentities.value}, -9)`, batch)));
+    for (const f of found) {
+      const suffix = phoneSuffix(f.value)!;
+      if (owners.has(suffix) && owners.get(suffix) !== f.contactId) ambiguous.add(suffix);
+      owners.set(suffix, f.contactId);
+    }
+  }
+  for (const suffix of ambiguous) owners.delete(suffix);
   return owners;
 }
 
