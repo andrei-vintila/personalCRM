@@ -7,12 +7,12 @@ import type { DB } from "./db";
 import { createContact, createReminder, logInteraction, updateContact } from "./mutations";
 
 /**
- * MCP server exposing the CRM to AI assistants (Claude, ChatGPT, ...).
+ * MCP server exposing the PRM to AI assistants (Claude, ChatGPT, ...).
  * Stateless: a fresh server per request, bound to that request's database.
  * There is intentionally no delete tool.
  */
 export function createMcpServer(db: DB) {
-  const server = new McpServer({ name: "personal-crm", version: "1.0.0" });
+  const server = new McpServer({ name: "prm", version: "1.0.0" });
 
   const json = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value, null, 1) }] });
   const readOnly = { readOnlyHint: true, openWorldHint: false };
@@ -290,9 +290,9 @@ export function createMcpServer(db: DB) {
   );
 
   server.registerTool(
-    "crm_overview",
+    "prm_overview",
     {
-      title: "CRM overview",
+      title: "PRM overview",
       description: "Totals and tags: how many contacts, how many have keep-in-touch goals or are overdue, recent activity, and every tag with its count.",
       inputSchema: {},
       annotations: readOnly,

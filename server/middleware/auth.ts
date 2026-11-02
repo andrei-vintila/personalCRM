@@ -23,6 +23,6 @@ export default defineHandler(async (event) => {
   }
 
   const session = await getSession<{ user?: string }>(event, await sessionConfig(event));
-  if (!session.data.user) throw new HTTPError({ status: 401, message: isMcp ? "Use an API token: Authorization: Bearer crm_…" : "Not signed in" });
+  if (!session.data.user) throw new HTTPError({ status: 401, message: isMcp ? "Use an API token: Authorization: Bearer prm_…" : "Not signed in" });
   event.context.auth = "session";
 });

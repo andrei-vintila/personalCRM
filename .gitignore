@@ -7,3 +7,10 @@ data/*.db*
 .env
 .dev.vars
 .DS_Store
+# macOS app: the Xcode project is generated from macos/project.yml
+macos/*.xcodeproj
+macos/build
+macos/.build
+macos/PRM/Info.plist
+macos/PRM/PRM.entitlements
+xcuserdata

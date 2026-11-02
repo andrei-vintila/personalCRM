@@ -4,7 +4,7 @@
  * not expose usable tokens.
  */
 async function deriveKey(secret: string) {
-  const raw = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`personal-crm-tokens:${secret}`));
+  const raw = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`prm-tokens:${secret}`));
   return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 

@@ -2,7 +2,7 @@ import { getRequestURL, HTTPError, type H3Event } from "nitro/h3";
 import { getEnv } from "../env";
 import { googleConfig } from "./client";
 
-export const OAUTH_STATE_COOKIE = "crm_google_oauth";
+export const OAUTH_STATE_COOKIE = "prm_google_oauth";
 
 export function requireGoogleConfig(event: H3Event) {
   const config = googleConfig((key) => getEnv(event, key));

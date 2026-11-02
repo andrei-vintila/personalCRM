@@ -21,8 +21,8 @@ export function Layout() {
 
   useEffect(() => {
     const onUnauthorized = () => queryClient.setQueryData(["me"], { authenticated: false });
-    window.addEventListener("crm:unauthorized", onUnauthorized);
-    return () => window.removeEventListener("crm:unauthorized", onUnauthorized);
+    window.addEventListener("prm:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("prm:unauthorized", onUnauthorized);
   }, [queryClient]);
 
   const logout = useMutation({
@@ -42,7 +42,7 @@ export function Layout() {
       <aside className="sticky top-0 z-20 flex shrink-0 items-center gap-1 border-b border-zinc-200 bg-zinc-50/90 px-3 py-2 backdrop-blur md:h-dvh md:w-56 md:flex-col md:items-stretch md:border-r md:border-b-0 md:px-3 md:py-4 dark:border-zinc-800 dark:bg-zinc-950/90">
         <div className="mr-2 hidden items-center gap-2 px-2 pb-4 font-semibold md:flex">
           <span className="inline-flex size-7 items-center justify-center rounded-lg bg-accent-600 text-white">◎</span>
-          Personal CRM
+          PRM
         </div>
         <nav className="flex flex-1 gap-1 md:flex-col">
           {nav.map(({ to, label, icon: Icon, end }) => (
@@ -105,7 +105,7 @@ function Login() {
           <span className="mx-auto mb-3 inline-flex size-10 items-center justify-center rounded-xl bg-accent-600 text-lg text-white">
             ◎
           </span>
-          <h1 className="text-xl font-semibold">Personal CRM</h1>
+          <h1 className="text-xl font-semibold">PRM</h1>
           <p className="text-sm text-zinc-500">Enter your password to continue.</p>
         </div>
         <Input

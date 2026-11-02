@@ -282,7 +282,7 @@ function ApiTokensCard() {
       <div className="space-y-3 p-4">
         <p className="text-sm text-zinc-500">
           For AI assistants (MCP), the Mac connector and scripts. Send as <code>Authorization: Bearer …</code>. A token can read and change
-          your CRM but can't create other tokens.
+          your PRM but can't create other tokens.
         </p>
         <form
           className="flex gap-2"
@@ -339,10 +339,10 @@ function McpCard() {
         </p>
         <CodeBlock>{url}</CodeBlock>
         <p className="font-medium text-zinc-900 dark:text-zinc-100">Claude Code</p>
-        <CodeBlock>{`claude mcp add --transport http personal-crm ${url} --header "Authorization: Bearer <token>"`}</CodeBlock>
+        <CodeBlock>{`claude mcp add --transport http prm ${url} --header "Authorization: Bearer <token>"`}</CodeBlock>
         <p className="font-medium text-zinc-900 dark:text-zinc-100">Claude Desktop and other clients (claude_desktop_config.json)</p>
         <CodeBlock>{JSON.stringify(
-          { mcpServers: { "personal-crm": { command: "npx", args: ["-y", "mcp-remote", url, "--header", "Authorization: Bearer <token>"] } } },
+          { mcpServers: { "prm": { command: "npx", args: ["-y", "mcp-remote", url, "--header", "Authorization: Bearer <token>"] } } },
           null,
           2,
         )}</CodeBlock>
@@ -367,7 +367,7 @@ function MacConnectorCard() {
           <li>From the project folder, preview what it would send, then run it:</li>
         </ol>
         <CodeBlock>{`npm run connector -- --dry-run`}</CodeBlock>
-        <CodeBlock>{`CRM_URL=${origin} CRM_TOKEN=<token> npm run connector`}</CodeBlock>
+        <CodeBlock>{`PRM_URL=${origin} PRM_TOKEN=<token> npm run connector`}</CodeBlock>
         <p>To keep it in sync, schedule it with launchd (see the README). It only sends what's new since the last run.</p>
       </div>
     </Card>

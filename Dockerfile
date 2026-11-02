@@ -7,7 +7,7 @@ RUN npm run build
 
 FROM node:24-slim
 WORKDIR /app
-ENV NODE_ENV=production PORT=3000 DATABASE_URL=file:/data/crm.db MIGRATIONS_DIR=/app/drizzle
+ENV NODE_ENV=production PORT=3000 DATABASE_URL=file:/data/prm.db MIGRATIONS_DIR=/app/drizzle
 COPY --from=build /app/.output ./.output
 COPY --from=build /app/drizzle ./drizzle
 VOLUME /data

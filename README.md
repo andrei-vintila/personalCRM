@@ -1,6 +1,6 @@
-# Personal CRM
+# PRM: Personal Relationship Manager
 
-A self-hosted personal CRM: one place for everyone you know, a timeline of your interactions, keep-in-touch reminders, birthdays, and imports that de-duplicate people by email, phone and LinkedIn.
+A self-hosted personal relationship manager (PRM): one place for everyone you know, a timeline of your interactions, keep-in-touch reminders, birthdays, and imports that de-duplicate people by email, phone and LinkedIn.
 
 **Stack:** [Nitro v3](https://nitro.build) (RC) + h3 v2 on the server, Drizzle ORM on SQLite (libsql on Node, D1 on Cloudflare), React 19 + Vite + TanStack Query + Tailwind v4 on the client. The whole thing is a single Vite app; Nitro adds the `/api` routes and builds a server for whichever target you pick.
 
@@ -12,7 +12,7 @@ cp .env.example .env   # set APP_PASSWORD
 npm run dev            # http://localhost:5173
 ```
 
-The SQLite database is created at `./data/crm.db`, and migrations run automatically on the first request.
+The SQLite database is created at `./data/prm.db`, and migrations run automatically on the first request.
 
 ## Deploy on a VM (Node)
 
@@ -35,7 +35,7 @@ docker compose up -d   # data persists in ./data
 ## Deploy on Cloudflare (Workers + D1)
 
 ```bash
-npx wrangler d1 create personal-crm      # copy the database_id into wrangler.jsonc
+npx wrangler d1 create prm      # copy the database_id into wrangler.jsonc
 npx wrangler secret put APP_PASSWORD
 npm run deploy:cf                        # build, apply D1 migrations, deploy
 ```
@@ -88,60 +88,66 @@ OAuth tokens are encrypted in the database with a key derived from `GOOGLE_CLIEN
 
 ## API tokens
 
-**Settings → API tokens** creates tokens for programmatic access. Send them as `Authorization: Bearer crm_…` to any `/api/*` route or to `/mcp`. Only a SHA-256 hash is stored, and each token is shown once. Tokens can't create or revoke tokens; that needs a signed-in browser session.
+**Settings → API tokens** creates tokens for programmatic access. Send them as `Authorization: Bearer prm_…` to any `/api/*` route or to `/mcp`. Only a SHA-256 hash is stored, and each token is shown once. Tokens can't create or revoke tokens; that needs a signed-in browser session.
 
 ## AI assistants (MCP)
 
 `/mcp` is an [MCP](https://modelcontextprotocol.io) server (Streamable HTTP, stateless, JSON responses) that works on Node and Workers alike. Its tools:
 
-- **Read:** `search_contacts`, `get_contact`, `search_interactions`, `list_reminders`, `reconnect_suggestions`, `crm_overview`
+- **Read:** `search_contacts`, `get_contact`, `search_interactions`, `list_reminders`, `reconnect_suggestions`, `prm_overview`
 - **Write:** `create_contact`, `update_contact`, `log_interaction`, `create_reminder`, `complete_reminder`
 
 There is deliberately no delete tool.
 
 ```bash
 # Claude Code
-claude mcp add --transport http personal-crm https://crm.example.com/mcp --header "Authorization: Bearer crm_…"
+claude mcp add --transport http prm https://prm.example.com/mcp --header "Authorization: Bearer prm_…"
 ```
 
 Claude Desktop and other clients that expect a local command can use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote); Settings shows the exact config. Clients that require OAuth for remote servers aren't supported yet.
 
 ## Phone calls and WhatsApp (Mac connector)
 
+The Mac app below does this natively; the script is for headless use (e.g. a Mac mini) or if you don't run the app.
+
 Call history and WhatsApp chats only exist on your devices, so `connector/mac-sync.ts` reads them on your Mac and pushes timeline entries to `/api/import/interactions` with an API token. It works the same against a VM or Cloudflare deployment.
 
-- **Calls:** answered Phone, FaceTime and CallKit calls (e.g. WhatsApp voice) from `~/Library/Application Support/CallHistoryDB`, which includes iPhone calls when "Calls on other devices" is on. Missed calls are skipped. Callers that are in your Mac contacts become CRM contacts; unknown numbers only link to people you already have.
+- **Calls:** answered Phone, FaceTime and CallKit calls (e.g. WhatsApp voice) from `~/Library/Application Support/CallHistoryDB`, which includes iPhone calls when "Calls on other devices" is on. Missed calls are skipped. Callers that are in your Mac contacts become PRM contacts; unknown numbers only link to people you already have.
 - **WhatsApp:** from the WhatsApp Mac app's local store. One entry per chat per day ("WhatsApp · 3 messages"), **metadata only, never message text**. People you wrote to become contacts; group members and inbound-only chats only link to existing contacts.
 - **Matching:** phone numbers match across formats (`+40 712…` and `0712…` by their last 9 digits, when exactly one contact matches).
 
 ```bash
 npm run connector -- --dry-run                       # summary only, nothing sent
-CRM_URL=https://crm.example.com CRM_TOKEN=crm_… npm run connector
+PRM_URL=https://prm.example.com PRM_TOKEN=prm_… npm run connector
 ```
 
-It needs **Full Disk Access** for whatever runs it (your terminal app, or `node` under launchd). Progress is kept in `~/.config/personal-crm/connector.json`, so each run sends only what's new (the first run goes back `--since-days`, default 180). It reads copies of the databases and never modifies them.
+It needs **Full Disk Access** for whatever runs it (your terminal app, or `node` under launchd). Progress is kept in `~/.config/prm/connector.json`, so each run sends only what's new (the first run goes back `--since-days`, default 180). It reads copies of the databases and never modifies them.
 
-To run it every 30 minutes, save this as `~/Library/LaunchAgents/com.personal-crm.connector.plist`, then run `launchctl load` on that file:
+To run it every 30 minutes, save this as `~/Library/LaunchAgents/com.prm.connector.plist`, then run `launchctl load` on that file:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>Label</key><string>com.personal-crm.connector</string>
+  <key>Label</key><string>com.prm.connector</string>
   <key>ProgramArguments</key><array>
     <string>/opt/homebrew/bin/node</string>
     <string>/path/to/personalCRM/connector/mac-sync.ts</string>
   </array>
   <key>EnvironmentVariables</key><dict>
-    <key>CRM_URL</key><string>https://crm.example.com</string>
-    <key>CRM_TOKEN</key><string>crm_…</string>
+    <key>PRM_URL</key><string>https://prm.example.com</string>
+    <key>PRM_TOKEN</key><string>prm_…</string>
   </dict>
   <key>StartInterval</key><integer>1800</integer>
-  <key>StandardErrorPath</key><string>/tmp/personal-crm-connector.log</string>
+  <key>StandardErrorPath</key><string>/tmp/prm-connector.log</string>
 </dict></plist>
 ```
 
 Under launchd, grant Full Disk Access to the `node` binary itself.
+
+## Mac app
+
+`macos/` is a native SwiftUI client for the same backend: three columns like Mail, contact pages with the timeline and a log composer, reminders, duplicates review and merge, and built-in calls and WhatsApp sync that replaces the Node connector. It signs in with your password once, then uses its own API token stored in the Keychain. See [macos/README.md](macos/README.md) to build it (needs Xcode).
 
 ## Database changes
 
@@ -170,7 +176,7 @@ server/
   tasks/              Scheduled jobs (Google sync, duplicate scan)
   routes/mcp.ts       MCP endpoint (tools in utils/mcpServer.ts)
 connector/
-  mac-sync.ts         Mac connector: call history and WhatsApp → CRM
+  mac-sync.ts         Mac connector: call history and WhatsApp → PRM
 src/
   pages/              Home, Contacts, ContactDetail, Reminders, Import
   lib/importers.ts    LinkedIn / Google / generic CSV → contacts (parsed in the browser)

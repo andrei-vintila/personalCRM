@@ -2,14 +2,14 @@
 // at build time (`npm run build:cf`), so `wrangler deploy` works from the repo root.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "personal-crm",
+  "name": "prm",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "personal-crm",
-      // Replace with the id printed by `npx wrangler d1 create personal-crm`
+      "database_name": "prm",
+      // Replace with the id printed by `npx wrangler d1 create prm`
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "drizzle"
     }

@@ -11,9 +11,9 @@ export async function sessionConfig(event: H3Event): Promise<SessionConfig> {
   if (!password) {
     throw new HTTPError({ status: 503, message: "APP_PASSWORD is not configured on the server" });
   }
-  const secret = getEnv(event, "SESSION_SECRET") ?? (await sha256Hex(`personal-crm-session:${password}`));
+  const secret = getEnv(event, "SESSION_SECRET") ?? (await sha256Hex(`prm-session:${password}`));
   return {
-    name: "crm_session",
+    name: "prm_session",
     password: secret,
     maxAge: 60 * 60 * 24 * 30,
     cookie: { httpOnly: true, sameSite: "lax", secure: !import.meta.dev, path: "/" },

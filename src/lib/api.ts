@@ -70,7 +70,7 @@ export async function api<T>(path: string, init?: Omit<RequestInit, "body"> & { 
   if (res.status === 204) return undefined as T;
   const payload = await res.json().catch(() => null);
   if (!res.ok) {
-    if (res.status === 401 && !path.startsWith("/auth/")) window.dispatchEvent(new Event("crm:unauthorized"));
+    if (res.status === 401 && !path.startsWith("/auth/")) window.dispatchEvent(new Event("prm:unauthorized"));
     throw new ApiError(res.status, payload?.message ?? res.statusText, payload?.data);
   }
   return payload as T;

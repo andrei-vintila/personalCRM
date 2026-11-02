@@ -1,11 +1,11 @@
 /**
- * Mac connector: syncs phone/FaceTime call history and WhatsApp activity into the CRM.
+ * Mac connector: syncs phone/FaceTime call history and WhatsApp activity into the PRM.
  *
  * These live only on your Mac (no server API exists), so this script reads the local
  * databases and pushes timeline entries to /api/import/interactions with an API token.
  * WhatsApp sync is metadata only (who, when, how many messages); message text is never read.
  *
- *   CRM_URL=https://crm.example.com CRM_TOKEN=crm_… node connector/mac-sync.ts [--dry-run]
+ *   PRM_URL=https://prm.example.com PRM_TOKEN=prm_… node connector/mac-sync.ts [--dry-run]
  *
  * Needs Full Disk Access for the app running it (Terminal, iTerm, or node itself under launchd):
  * System Settings → Privacy & Security → Full Disk Access.
@@ -16,7 +16,7 @@
  *   --since-days N       First-run backfill window (default 180)
  *   --calls-db PATH      Override CallHistory.storedata location
  *   --whatsapp-db PATH   Override ChatStorage.sqlite location
- *   --state PATH         Where sync progress is kept (default ~/.config/personal-crm/connector.json)
+ *   --state PATH         Where sync progress is kept (default ~/.config/prm/connector.json)
  */
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -61,15 +61,15 @@ const { values: args } = parseArgs({
     "since-days": { type: "string", default: "180" },
     "calls-db": { type: "string", default: DEFAULT_CALLS_DB },
     "whatsapp-db": { type: "string", default: DEFAULT_WHATSAPP_DB },
-    state: { type: "string", default: join(HOME, ".config/personal-crm/connector.json") },
+    state: { type: "string", default: join(HOME, ".config/prm/connector.json") },
   },
 });
 
 const dryRun = args["dry-run"];
-const crmUrl = process.env.CRM_URL?.replace(/\/+$/, "");
-const crmToken = process.env.CRM_TOKEN;
-if (!dryRun && (!crmUrl || !crmToken)) {
-  console.error("Set CRM_URL and CRM_TOKEN (create a token under Settings → API tokens), or use --dry-run.");
+const prmUrl = process.env.PRM_URL?.replace(/\/+$/, "");
+const prmToken = process.env.PRM_TOKEN;
+if (!dryRun && (!prmUrl || !prmToken)) {
+  console.error("Set PRM_URL and PRM_TOKEN (create a token under Settings → API tokens), or use --dry-run.");
   process.exit(1);
 }
 
@@ -79,7 +79,7 @@ const backfillFrom = Date.now() - Number(args["since-days"]) * DAY_MS;
 /** Opens a copy of a live SQLite database (plus WAL files) so we never lock or modify it. */
 function openSnapshot(path: string): { db: DatabaseSync; cleanup: () => void } | null {
   if (!existsSync(path)) return null;
-  const dir = mkdtempSync(join(tmpdir(), "crm-connector-"));
+  const dir = mkdtempSync(join(tmpdir(), "prm-connector-"));
   const copy = join(dir, "db.sqlite");
   try {
     copyFileSync(path, copy);
@@ -250,12 +250,12 @@ async function push(source: string, items: Item[]) {
   let interactions = 0;
   let contactsCreated = 0;
   for (let i = 0; i < items.length; i += BATCH) {
-    const res = await fetch(`${crmUrl}/api/import/interactions`, {
+    const res = await fetch(`${prmUrl}/api/import/interactions`, {
       method: "POST",
-      headers: { authorization: `Bearer ${crmToken}`, "content-type": "application/json" },
+      headers: { authorization: `Bearer ${prmToken}`, "content-type": "application/json" },
       body: JSON.stringify({ source, items: items.slice(i, i + BATCH) }),
     });
-    if (!res.ok) throw new Error(`CRM responded ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (!res.ok) throw new Error(`PRM responded ${res.status}: ${(await res.text()).slice(0, 300)}`);
     const result = (await res.json()) as { interactions: number; contactsCreated: number };
     interactions += result.interactions;
     contactsCreated += result.contactsCreated;
@@ -290,7 +290,7 @@ for (const s of sources) {
     const pushed = await push(s.source, result.items);
     state[s.key] = { lastDate: result.lastDate };
     saveState();
-    console.log(`${summary}; CRM linked ${pushed.interactions}, created ${pushed.contactsCreated} contacts`);
+    console.log(`${summary}; PRM linked ${pushed.interactions}, created ${pushed.contactsCreated} contacts`);
   } catch (error) {
     failed = true;
     console.error(`${s.label}: ${error instanceof Error ? error.message : error}`);

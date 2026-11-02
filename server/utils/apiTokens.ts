@@ -3,7 +3,7 @@ import { getRequestHeader, type H3Event } from "nitro/h3";
 import { apiTokens } from "../db/schema";
 import type { DB } from "./db";
 
-const TOKEN_PREFIX = "crm_";
+const TOKEN_PREFIX = "prm_";
 /** Avoid a write on every request: lastUsedAt is only refreshed this often. */
 const TOUCH_INTERVAL_MS = 60_000;
 

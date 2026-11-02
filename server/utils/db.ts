@@ -12,7 +12,7 @@ let nodeDb: Promise<DB> | undefined;
 
 /**
  * Cloudflare: uses the `DB` D1 binding (migrations via `wrangler d1 migrations apply`).
- * Node / VM: uses libsql with DATABASE_URL (default `file:./data/crm.db`, Turso URLs work too)
+ * Node / VM: uses libsql with DATABASE_URL (default `file:./data/prm.db`, Turso URLs work too)
  * and applies pending migrations from MIGRATIONS_DIR on first use.
  */
 export function useDb(event: H3Event): Promise<DB> {
@@ -33,7 +33,7 @@ export function getDb(bindings: CloudflareBindings): Promise<DB> {
 async function createNodeDb(): Promise<DB> {
   const { drizzle } = await import("drizzle-orm/libsql");
   const { migrate } = await import("drizzle-orm/libsql/migrator");
-  const url = process.env.DATABASE_URL ?? "file:./data/crm.db";
+  const url = process.env.DATABASE_URL ?? "file:./data/prm.db";
 
   if (url.startsWith("file:")) {
     const { mkdir } = await import("node:fs/promises");
