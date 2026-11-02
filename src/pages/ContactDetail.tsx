@@ -12,6 +12,7 @@ import {
   Link2,
   Mail,
   MapPin,
+  Merge,
   MessageSquare,
   Pencil,
   Phone,
@@ -25,6 +26,7 @@ import { api, type ContactDetail, type IdentityKind, type InteractionItem, type 
 import { cadenceLabel, formatBirthday, formatDate, relativeTime, toLocalInput } from "../lib/format";
 import { Avatar, Badge, Button, Card, CardHeader, Empty, ErrorText, Input, Select, Textarea } from "../components/ui";
 import { ContactFormDialog } from "../components/ContactForm";
+import { MergeWithDialog } from "../components/MergeDialog";
 import { ReminderRow } from "./Reminders";
 
 const interactionMeta: Record<InteractionType, { label: string; icon: typeof StickyNote }> = {
@@ -76,6 +78,7 @@ export function ContactDetailPage() {
   const navigate = useNavigate();
   const invalidate = useInvalidateContact(id!);
   const [editing, setEditing] = useState(false);
+  const [mergingWith, setMergingWith] = useState(false);
   const contact = useQuery({ queryKey: ["contact", id], queryFn: () => api<ContactDetail>(`/contacts/${id}`) });
 
   const patch = useMutation({
@@ -145,6 +148,9 @@ export function ContactDetailPage() {
             onClick={() => confirm(`Delete ${c.name}? This also removes their reminders.`) && remove.mutate()}
           >
             <Trash2 className="size-4" />
+          </Button>
+          <Button onClick={() => setMergingWith(true)}>
+            <Merge className="size-4" /> Merge…
           </Button>
           <Button onClick={() => setEditing(true)}>
             <Pencil className="size-4" /> Edit
@@ -225,6 +231,7 @@ export function ContactDetailPage() {
       </div>
 
       <ContactFormDialog open={editing} onClose={() => setEditing(false)} contact={c} />
+      <MergeWithDialog open={mergingWith} onClose={() => setMergingWith(false)} contact={c} />
     </div>
   );
 }

@@ -50,6 +50,16 @@ npx wrangler dev --var APP_PASSWORD:dev-password
 
 Nitro merges `wrangler.jsonc` into `.output/server/wrangler.json` and points wrangler at it, so `wrangler` commands work from the repo root. Static assets are served by Workers Assets; `/api/*` goes to the Worker.
 
+## Duplicates and merging
+
+**Contacts → Review** lists likely duplicates, best first, with the reason for each: the same name (ignoring accents, honorifics and parentheses), nicknames (Bob/Robert), an initial matching a full first name, small typos, the same phone in local vs international format, or the same email username at a different domain. Contacts can never share an email, phone or LinkedIn URL, so these near-misses are what's left after imports and syncs.
+
+- **Merge…** lets you choose which record to keep and which value wins for each conflicting field. Identities, tags, timeline and reminders are combined, notes are joined, and the other records are deleted. The merge runs as a single transaction (`batch()` on D1 and libsql).
+- **Not the same person** hides a pair for good.
+- Any contact page also has **Merge…** to pick another contact by hand.
+
+Detection runs over the whole contact list on each request. That takes a few hundred milliseconds of CPU at 20k contacts, so on the Workers free plan (10 ms CPU) very large lists may need the paid plan.
+
 ## Google sync
 
 Connect a Google account under **Settings** to pull in:
@@ -91,6 +101,8 @@ server/
   utils/db.ts         Picks D1 (Cloudflare binding `DB`) or libsql (Node)
   utils/contacts.ts   Queries shared by routes
   utils/ingest.ts     Idempotent bulk upserts shared by import and sync
+  utils/duplicates.ts Duplicate detection (pure, in-memory)
+  utils/merge.ts      Atomic contact merge
   utils/google/       OAuth client and resumable sync steps
   tasks/google/       Scheduled incremental sync
 src/

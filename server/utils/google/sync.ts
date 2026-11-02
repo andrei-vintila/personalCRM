@@ -223,11 +223,11 @@ async function syncCalendarStep(ctx: StepContext) {
     if (event.attendees.find((a) => a.self)?.responseStatus === "declined") continue;
     const others = event.attendees
       .filter((a) => a.email && !a.self && !a.resource && a.responseStatus !== "declined" && !ctx.ownEmails.has(a.email.toLowerCase()))
-      .map((a) => ({ email: a.email!, name: a.displayName, create: true }));
+      .map((a) => ({ kind: "email" as const, value: a.email!, name: a.displayName, create: true }));
     if (others.length > 0) meetings.push({ event, others });
   }
 
-  const { contactByEmail, created } = await resolveParticipants(
+  const { contactFor, created } = await resolveParticipants(
     ctx.db,
     meetings.flatMap((m) => m.others),
     "gcal",
@@ -238,7 +238,7 @@ async function syncCalendarStep(ctx: StepContext) {
     type: "meeting",
     occurredAt: new Date(event.start!.dateTime!),
     title: event.summary ?? "Meeting",
-    contactIds: others.map((o) => contactByEmail.get(o.email.toLowerCase())).filter((id): id is string => Boolean(id)),
+    contactIds: others.map((o) => contactFor("email", o.value)).filter((id): id is string => Boolean(id)),
   }));
   const written = await upsertInteractions(ctx.db, items);
 
@@ -307,10 +307,15 @@ async function syncGmailStep(ctx: StepContext) {
     if (!sent && header("List-Unsubscribe")) continue;
 
     const recipients = [...parseAddressList(header("To")), ...parseAddressList(header("Cc"))];
-    const people = [
-      ...parseAddressList(header("From")).map((p) => ({ ...p, create: false })),
-      ...recipients.map((p) => ({ ...p, create: sent && recipients.length <= MAX_RECIPIENTS_TO_CREATE })),
-    ].filter((p) => !ctx.ownEmails.has(p.email));
+    const people: Participant[] = [
+      ...parseAddressList(header("From")).map((p) => ({ kind: "email" as const, value: p.email, name: p.name, create: false })),
+      ...recipients.map((p) => ({
+        kind: "email" as const,
+        value: p.email,
+        name: p.name,
+        create: sent && recipients.length <= MAX_RECIPIENTS_TO_CREATE,
+      })),
+    ].filter((p) => !ctx.ownEmails.has(p.value));
     if (people.length === 0) continue;
 
     const thread = threads.get(message.threadId);
@@ -321,7 +326,7 @@ async function syncGmailStep(ctx: StepContext) {
     }
   }
 
-  const { contactByEmail, created } = await resolveParticipants(
+  const { contactFor, created } = await resolveParticipants(
     ctx.db,
     [...threads.values()].flatMap((t) => t.participants),
     "gmail",
@@ -335,7 +340,7 @@ async function syncGmailStep(ctx: StepContext) {
       occurredAt: new Date(t.at),
       title: subject?.trim() || "(no subject)",
       body: decodeEntities(t.latest.snippet ?? ""),
-      contactIds: t.participants.map((p) => contactByEmail.get(p.email)).filter((id): id is string => Boolean(id)),
+      contactIds: t.participants.map((p) => contactFor(p.kind, p.value)).filter((id): id is string => Boolean(id)),
     };
   });
   const written = await upsertInteractions(ctx.db, items);

@@ -53,3 +53,15 @@ export function chunk<T>(items: T[], size: number): T[][] {
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
 }
+
+/**
+ * Runs statements atomically: D1 and libsql both execute `batch` as one transaction.
+ * Pass unawaited Drizzle query builders; avoid db.run(sql`...`) with parameters,
+ * which Drizzle's D1 batch fails to bind.
+ */
+export async function runBatch(db: DB, queries: PromiseLike<unknown>[]) {
+  if (queries.length === 0) return;
+  const batch = (db as unknown as { batch?: (q: PromiseLike<unknown>[]) => Promise<unknown> }).batch;
+  if (typeof batch !== "function") throw new Error("This database driver does not support batch()");
+  await batch.call(db, queries);
+}

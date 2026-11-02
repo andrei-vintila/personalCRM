@@ -10,6 +10,7 @@ import { ContactDetailPage } from "./pages/ContactDetail";
 import { RemindersPage } from "./pages/Reminders";
 import { ImportPage } from "./pages/Import";
 import { SettingsPage } from "./pages/Settings";
+import { DuplicatesPage } from "./pages/Duplicates";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -27,6 +28,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <HomePage /> },
       { path: "contacts", element: <ContactsPage /> },
+      { path: "contacts/duplicates", element: <DuplicatesPage /> },
       { path: "contacts/:id", element: <ContactDetailPage /> },
       { path: "reminders", element: <RemindersPage /> },
       { path: "import", element: <ImportPage /> },

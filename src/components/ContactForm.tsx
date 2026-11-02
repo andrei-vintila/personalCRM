@@ -63,6 +63,7 @@ function ContactForm({ contact, onDone }: { contact?: ContactDetail; onDone: () 
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
       queryClient.invalidateQueries({ queryKey: ["home"] });
       queryClient.invalidateQueries({ queryKey: ["tags"] });
+      queryClient.invalidateQueries({ queryKey: ["duplicates"] });
       onDone();
       if (!contact) navigate(`/contacts/${saved.id}`);
     },

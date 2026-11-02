@@ -133,7 +133,11 @@ export function Dialog({
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      dialog.showModal();
+      // showModal() focuses the first focusable element (the close button); prefer the first text field.
+      dialog.querySelector<HTMLElement>("input:not([type=radio]):not([type=checkbox]):not([type=hidden]), textarea")?.focus();
+    }
     if (!open && dialog.open) dialog.close();
   }, [open]);
 

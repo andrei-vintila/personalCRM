@@ -1,10 +1,11 @@
 import { useDeferredValue } from "react";
 import { Link, useSearchParams } from "react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Search, Star } from "lucide-react";
+import { Copy, Search, Star } from "lucide-react";
 import { api, type ContactSummary, type TagCount } from "../lib/api";
 import { relativeTime } from "../lib/format";
 import { Avatar, Badge, Card, cx, Empty, Input, Select } from "../components/ui";
+import { useDuplicates } from "./Duplicates";
 
 const filters = [
   { id: "all", label: "All" },
@@ -37,10 +38,22 @@ export function ContactsPage() {
     placeholderData: keepPreviousData,
   });
   const tags = useQuery({ queryKey: ["tags"], queryFn: () => api<TagCount[]>("/tags") });
+  const duplicates = useDuplicates();
 
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
+
+      {(duplicates.data?.total ?? 0) > 0 && (
+        <Link
+          to="/contacts/duplicates"
+          className="flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-900 ring-1 ring-amber-200 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-900"
+        >
+          <Copy className="size-4" />
+          {duplicates.data!.total} possible {duplicates.data!.total === 1 ? "duplicate" : "duplicates"}
+          <span className="ml-auto font-medium">Review →</span>
+        </Link>
+      )}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="relative flex-1">

@@ -99,33 +99,37 @@ export async function importContacts(db: DB, opts: { source: string; tag?: strin
 }
 
 export interface Participant {
-  email: string;
+  kind: IdentityKind;
+  value: string;
   name?: string | null;
-  /** Create a contact if nobody has this email yet. */
+  /** Create a contact if nobody has this identity yet. */
   create: boolean;
 }
 
 /**
- * Maps email addresses to contact ids, creating contacts for participants marked
- * `create` (e.g. people you emailed or met with). Returns normalized email → contact id
- * and how many contacts were created.
+ * Maps identities (email, LinkedIn URL, ...) to contact ids, creating contacts for
+ * participants marked `create` (e.g. people you emailed, met or messaged).
+ * Returns a lookup that normalizes its input, plus how many contacts were created.
  */
 export async function resolveParticipants(db: DB, participants: Participant[], source: string) {
-  const byEmail = new Map<string, Participant>();
+  const byKey = new Map<string, Participant>();
   for (const p of participants) {
-    const email = normalizeIdentity("email", p.email);
-    if (!email.includes("@") || isAutomatedAddress(email)) continue;
-    const prev = byEmail.get(email);
-    byEmail.set(email, { email, name: prev?.name || p.name, create: Boolean(prev?.create || p.create) });
+    const value = normalizeIdentity(p.kind, p.value);
+    if (!value || (p.kind === "email" && (!value.includes("@") || isAutomatedAddress(value)))) continue;
+    const key = `${p.kind}:${value}`;
+    const prev = byKey.get(key);
+    byKey.set(key, { kind: p.kind, value, name: prev?.name || p.name, create: Boolean(prev?.create || p.create) });
   }
 
-  const owners = await lookupIdentityOwners(db, [...byEmail.keys()], "email");
-  const result = new Map<string, string>();
+  const result = await lookupIdentityOwners(
+    db,
+    [...byKey.values()].map((p) => p.value),
+  );
   const toCreate: IncomingContact[] = [];
-  for (const [email, p] of byEmail) {
-    const owner = owners.get(`email:${email}`);
-    if (owner) result.set(email, owner);
-    else if (p.create) toCreate.push({ name: p.name?.trim() || nameFromEmail(email), identities: [{ kind: "email", value: email }] });
+  for (const [key, p] of byKey) {
+    if (result.has(key) || !p.create) continue;
+    const name = p.name?.trim() || (p.kind === "email" ? nameFromEmail(p.value) : p.value);
+    toCreate.push({ name, identities: [{ kind: p.kind, value: p.value }] });
   }
 
   let created = 0;
@@ -134,11 +138,12 @@ export async function resolveParticipants(db: DB, participants: Participant[], s
     const createdOwners = await lookupIdentityOwners(
       db,
       toCreate.map((c) => c.identities[0].value),
-      "email",
     );
-    for (const [key, contactId] of createdOwners) result.set(key.slice("email:".length), contactId);
+    for (const [key, contactId] of createdOwners) result.set(key, contactId);
   }
-  return { contactByEmail: result, created };
+
+  const contactFor = (kind: IdentityKind, value: string) => result.get(`${kind}:${normalizeIdentity(kind, value)}`);
+  return { contactFor, created };
 }
 
 export interface IncomingInteraction {

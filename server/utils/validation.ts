@@ -77,3 +77,49 @@ export const importBatchSchema = z.object({
   tag: z.string().trim().max(50).nullish(),
   contacts: z.array(importContactSchema).min(1).max(25),
 });
+
+export const importInteractionsSchema = z.object({
+  source: z.string().trim().min(1).max(40),
+  items: z
+    .array(
+      z.object({
+        externalId: z.string().min(1).max(300),
+        type: z.enum(interactionTypes),
+        occurredAt: z.coerce.date(),
+        title: optionalText,
+        body: optionalText,
+        participants: z
+          .array(
+            z.object({
+              kind: z.enum(identityKinds),
+              value: z.string().trim().min(1).max(500),
+              name: optionalText,
+              create: z.boolean().default(false),
+            }),
+          )
+          .min(1)
+          .max(20),
+      }),
+    )
+    .min(1)
+    .max(25),
+});
+
+export const mergeSchema = z.object({
+  sourceIds: z.array(z.string().min(1)).min(1).max(20),
+  /** Explicit picks for conflicting fields; omitted fields keep the target's value. */
+  fields: z
+    .object({
+      name: z.string().trim().min(1).max(200),
+      company: z.string().trim().max(10_000).nullable(),
+      title: z.string().trim().max(10_000).nullable(),
+      location: z.string().trim().max(10_000).nullable(),
+      avatarUrl: z.string().trim().max(10_000).nullable(),
+      birthday: z.string().regex(/^(\d{4}|-)-\d{2}-\d{2}$/).nullable(),
+      about: z.string().trim().max(20_000).nullable(),
+    })
+    .partial()
+    .default({}),
+});
+
+export const dismissSchema = z.object({ contactIds: z.tuple([z.string().min(1), z.string().min(1)]) });

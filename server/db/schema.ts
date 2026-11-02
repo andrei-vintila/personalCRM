@@ -126,6 +126,21 @@ export const reminders = sqliteTable(
   (t) => [index("reminders_due_idx").on(t.dueAt)],
 );
 
+/** Pairs the user marked "not the same person"; contactA < contactB. */
+export const duplicateDismissals = sqliteTable(
+  "duplicate_dismissals",
+  {
+    contactA: text("contact_a")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    contactB: text("contact_b")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.contactA, t.contactB] })],
+);
+
 /**
  * Connected accounts (currently Google). Tokens are encrypted at rest; `state`
  * holds per-source sync cursors as JSON.
