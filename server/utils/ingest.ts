@@ -56,6 +56,7 @@ export async function importContacts(db: DB, opts: { source: string; tag?: strin
         about: row.about ?? null,
         birthday: row.birthday ?? null,
         avatarUrl: row.avatarUrl ?? null,
+        source: opts.source,
       });
     }
     touched.add(contactId);

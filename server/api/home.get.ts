@@ -1,7 +1,7 @@
 import { and, asc, count, eq, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { defineHandler } from "nitro/h3";
 import { contacts, interactions, reminders } from "../db/schema";
-import { listContacts, listInteractions } from "../utils/contacts";
+import { listContacts, listInteractions, sourceColumns, withSources } from "../utils/contacts";
 import { useDb } from "../utils/db";
 
 const DAY_MS = 86_400_000;
@@ -20,7 +20,7 @@ export default defineHandler(async (event) => {
       with: { contact: { columns: { id: true, name: true, avatarUrl: true } } },
     }),
     db
-      .select({ id: contacts.id, name: contacts.name, avatarUrl: contacts.avatarUrl, birthday: contacts.birthday })
+      .select({ id: contacts.id, name: contacts.name, avatarUrl: contacts.avatarUrl, birthday: contacts.birthday, source: contacts.source, ...sourceColumns })
       .from(contacts)
       .where(and(isNotNull(contacts.birthday), eq(contacts.archived, false))),
     db
@@ -34,7 +34,7 @@ export default defineHandler(async (event) => {
   ]);
 
   const birthdays = birthdayRows
-    .map((c) => ({ ...c, inDays: daysUntilBirthday(c.birthday!, new Date(now)) }))
+    .map((c) => ({ ...withSources(c), inDays: daysUntilBirthday(c.birthday!, new Date(now)) }))
     .filter((c) => c.inDays !== null && c.inDays <= 30)
     .sort((a, b) => a.inDays! - b.inDays!);
 

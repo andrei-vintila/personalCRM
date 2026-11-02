@@ -27,6 +27,7 @@ import { cadenceLabel, formatBirthday, formatDate, relativeTime, toLocalInput } 
 import { Avatar, Badge, Button, Card, CardHeader, Empty, ErrorText, Input, Select, Textarea } from "../components/ui";
 import { ContactFormDialog } from "../components/ContactForm";
 import { MergeWithDialog } from "../components/MergeDialog";
+import { SourceIcons } from "../components/SourceIcons";
 import { ReminderRow } from "./Reminders";
 
 const interactionMeta: Record<InteractionType, { label: string; icon: typeof StickyNote }> = {
@@ -106,6 +107,7 @@ export function ContactDetailPage() {
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-semibold tracking-tight">{c.name}</h1>
             {c.archived && <Badge>archived</Badge>}
+            <SourceIcons sources={c.sources} className="ml-1 [&_svg]:size-4" />
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-zinc-500">
             {(c.title || c.company) && (

@@ -1,35 +1,32 @@
-import { asc } from "drizzle-orm";
 import { defineHandler } from "nitro/h3";
-import { contacts, duplicateDismissals } from "../../db/schema";
 import { useDb } from "../../utils/db";
-import { findDuplicatePairs, pairKey } from "../../utils/duplicates";
+import { contactsFingerprint, getScanJob, listDuplicateGroups } from "../../utils/duplicateScan";
 
-const MAX_PAIRS = 200;
+const MAX_GROUPS = 100;
 
-/** Likely duplicate pairs, best first, with enough of each contact to compare side by side. */
+/**
+ * Results of the latest duplicate scan, grouped into clusters, plus its status. Nothing is computed here;
+ * `scan.stale` tells the client contacts changed since that scan.
+ */
 export default defineHandler(async (event) => {
   const db = await useDb(event);
-  const [rows, dismissals] = await Promise.all([
-    db.query.contacts.findMany({
-      orderBy: [asc(contacts.createdAt)],
-      with: { identities: { columns: { kind: true, value: true } }, tags: { with: { tag: { columns: { name: true } } } } },
-    }),
-    db.select().from(duplicateDismissals),
+  const [job, fingerprint, { total, groups }] = await Promise.all([
+    getScanJob(db),
+    contactsFingerprint(db),
+    listDuplicateGroups(db, MAX_GROUPS),
   ]);
-
-  const pairs = findDuplicatePairs(
-    rows,
-    new Set(dismissals.map((d) => pairKey(d.contactA, d.contactB))),
-  );
-  const byId = new Map(rows.map((r) => [r.id, r]));
+  const found = Number(job?.result?.total ?? 0);
   return {
-    total: pairs.length,
-    pairs: pairs.slice(0, MAX_PAIRS).map((p) => ({
-      ...p,
-      contacts: p.ids.map((id) => {
-        const { tags, ...c } = byId.get(id)!;
-        return { ...c, tags: tags.map((t) => t.tag.name) };
-      }),
-    })),
+    total,
+    /** More pairs exist than are stored; merge or dismiss some and rescan. */
+    capped: found > Number(job?.result?.stored ?? 0),
+    groups,
+    scan: {
+      status: job?.status ?? "idle",
+      startedAt: job?.startedAt ?? null,
+      finishedAt: job?.finishedAt ?? null,
+      error: job?.error ?? null,
+      stale: job?.fingerprint !== fingerprint,
+    },
   };
 });

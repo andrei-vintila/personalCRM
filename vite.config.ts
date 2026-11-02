@@ -12,7 +12,10 @@ export default defineConfig({
       compatibilityDate: "2026-10-01",
       experimental: { tasks: true },
       // Node runs this with an in-process scheduler; Cloudflare gets a cron trigger.
-      scheduledTasks: { "*/10 * * * *": ["google:sync"] },
+      scheduledTasks: {
+        "*/10 * * * *": ["google:sync"],
+        "*/30 * * * *": ["duplicates:scan"],
+      },
     }),
   ],
 });

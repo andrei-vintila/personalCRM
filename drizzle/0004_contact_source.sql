@@ -1,0 +1,1 @@
+ALTER TABLE `contacts` ADD `source` text DEFAULT 'manual' NOT NULL;

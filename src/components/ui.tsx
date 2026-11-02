@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useRef, type ComponentProps, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { Info, X } from "lucide-react";
 import { initials } from "../lib/format";
 
 const cx = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(" ");
@@ -169,6 +169,27 @@ export function Dialog({
 export function ErrorText({ error }: { error: unknown }) {
   if (!error) return null;
   return <p className="text-sm text-red-600 dark:text-red-400">{error instanceof Error ? error.message : String(error)}</p>;
+}
+
+/** An ⓘ button that reveals extra detail on hover or keyboard focus. */
+export function InfoTip({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <span className="group/tip relative inline-flex">
+      <button
+        type="button"
+        aria-label={label}
+        className="rounded-full p-1 text-zinc-400 hover:text-zinc-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 dark:hover:text-zinc-300"
+      >
+        <Info className="size-4" />
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none invisible absolute bottom-full left-0 z-20 mb-1 w-80 max-w-[80vw] rounded-lg bg-zinc-900 px-3 py-2 text-xs text-white opacity-0 shadow-lg transition-opacity group-focus-within/tip:visible group-focus-within/tip:opacity-100 group-hover/tip:visible group-hover/tip:opacity-100 dark:bg-zinc-100 dark:text-zinc-900"
+      >
+        {children}
+      </span>
+    </span>
+  );
 }
 
 export { cx };

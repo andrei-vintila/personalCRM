@@ -17,6 +17,55 @@ const DAY_MS = 86_400_000;
 
 export type ContactFilter = "all" | "starred" | "reconnect" | "archived";
 
+/**
+ * Where we know someone from, in display order. Identity sources ("google", "linkedin",
+ * "generic" CSV, "manual", ...) and interaction sources ("gmail", "gcal") come from the
+ * data; "calls" and "linkedin" are also inferred from call entries and LinkedIn profiles.
+ */
+const SOURCE_ORDER = ["manual", "google", "gmail", "gcal", "linkedin", "calls", "generic"];
+
+/**
+ * SQL columns that summarize a contact's sources. Usable in select() and as relational
+ * `extras` on the top-level contacts table. Written as plain SQL on purpose: relational
+ * queries render `${contacts.id}` in extras as a bare "id", which the subqueries would
+ * resolve to their own tables. Plain `contacts.id` works in both query styles.
+ */
+export const sourceColumns = {
+  identitySources: sql<string | null>`(select group_concat(distinct ci.source) from contact_identities ci where ci.contact_id = contacts.id)`.as(
+    "identity_sources",
+  ),
+  interactionSources: sql<
+    string | null
+  >`(select group_concat(distinct i.source) from interactions i inner join interaction_contacts ic on ic.interaction_id = i.id where ic.contact_id = contacts.id)`.as(
+    "interaction_sources",
+  ),
+  hasCalls: sql<number>`exists (select 1 from interactions i inner join interaction_contacts ic on ic.interaction_id = i.id where ic.contact_id = contacts.id and i.type = 'call')`.as(
+    "has_calls",
+  ),
+  hasLinkedin: sql<number>`exists (select 1 from contact_identities ci where ci.contact_id = contacts.id and ci.kind = 'linkedin')`.as("has_linkedin"),
+};
+
+type SourceFields = {
+  source: string;
+  identitySources: string | null;
+  interactionSources: string | null;
+  hasCalls: number | boolean;
+  hasLinkedin: number | boolean;
+};
+
+/** Replaces the raw source columns with a single ordered `sources` list. */
+export function withSources<T extends SourceFields>(row: T): Omit<T, Exclude<keyof SourceFields, "source">> & { sources: string[] } {
+  const { identitySources, interactionSources, hasCalls, hasLinkedin, ...rest } = row;
+  const fromIdentities = identitySources?.split(",") ?? [];
+  const set = new Set([row.source, ...fromIdentities, ...(interactionSources?.split(",") ?? [])].filter(Boolean));
+  // Manual timeline entries are just notes you typed; they don't make someone "from" anywhere.
+  if (row.source !== "manual" && !fromIdentities.includes("manual")) set.delete("manual");
+  if (hasCalls) set.add("calls");
+  if (hasLinkedin) set.add("linkedin");
+  const rank = (s: string) => (SOURCE_ORDER.includes(s) ? SOURCE_ORDER.indexOf(s) : SOURCE_ORDER.length);
+  return { ...rest, sources: [...set].sort((a, b) => rank(a) - rank(b)) };
+}
+
 export interface IdentityInput {
   kind: IdentityKind;
   value: string;
@@ -63,6 +112,7 @@ export async function listContacts(db: DB, opts: { q?: string; tag?: string; fil
     where: and(...where),
     orderBy: filter === "reconnect" ? [asc(dueAtSql)] : [desc(contacts.starred), asc(sql`lower(${contacts.name})`)],
     limit: opts.limit ?? 500,
+    extras: sourceColumns,
     with: {
       identities: { columns: { kind: true, value: true } },
       tags: { with: { tag: { columns: { name: true } } } },
@@ -70,7 +120,7 @@ export async function listContacts(db: DB, opts: { q?: string; tag?: string; fil
   });
 
   return rows.map(({ identities, tags: contactTagRows, ...contact }) => ({
-    ...contact,
+    ...withSources(contact),
     email: identities.find((i) => i.kind === "email")?.value ?? null,
     phone: identities.find((i) => i.kind === "phone")?.value ?? null,
     tags: contactTagRows.map((t) => t.tag.name).sort(),
@@ -81,6 +131,7 @@ export async function listContacts(db: DB, opts: { q?: string; tag?: string; fil
 export async function getContactDetail(db: DB, id: string) {
   const contact = await db.query.contacts.findFirst({
     where: eq(contacts.id, id),
+    extras: sourceColumns,
     with: {
       identities: { orderBy: [asc(contactIdentities.kind), asc(contactIdentities.createdAt)] },
       tags: { with: { tag: true } },
@@ -92,7 +143,7 @@ export async function getContactDetail(db: DB, id: string) {
   const timeline = await listInteractions(db, { contactId: id, limit: 200 });
   const { tags: contactTagRows, ...rest } = contact;
   return {
-    ...rest,
+    ...withSources(rest),
     tags: contactTagRows.map((t) => t.tag.name).sort(),
     interactions: timeline,
     dueAt: dueAt(contact),

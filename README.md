@@ -58,7 +58,12 @@ Nitro merges `wrangler.jsonc` into `.output/server/wrangler.json` and points wra
 - **Not the same person** hides a pair for good.
 - Any contact page also has **Merge…** to pick another contact by hand.
 
-Detection runs over the whole contact list on each request. That takes a few hundred milliseconds of CPU at 20k contacts, so on the Workers free plan (10 ms CPU) very large lists may need the paid plan.
+Detection is a background job; viewing duplicates only reads stored results (`duplicate_candidates`). A scan starts in either of two ways:
+
+- **Cron**, every 30 minutes, skipped when nothing relevant changed (it compares a fingerprint of contacts and identities with the last scan).
+- **On demand**, from **Scan now** or automatically when the review page opens and the results are stale. `POST /api/duplicates/scan` returns 202 immediately; the scan continues via `waitUntil` and the page polls until it's done.
+
+A lock row in `jobs` keeps it to one scan at a time; a claim older than 10 minutes is treated as dead. The best 500 pairs are stored and replaced in one transaction. A scan takes about 20 ms at 2,000 contacts and a few hundred ms at 20k, which can exceed the Workers free plan's 10 ms CPU limit for large lists.
 
 ## Google sync
 
@@ -102,9 +107,10 @@ server/
   utils/contacts.ts   Queries shared by routes
   utils/ingest.ts     Idempotent bulk upserts shared by import and sync
   utils/duplicates.ts Duplicate detection (pure, in-memory)
+  utils/duplicateScan.ts  Background scan job: lock, fingerprint, stored results
   utils/merge.ts      Atomic contact merge
   utils/google/       OAuth client and resumable sync steps
-  tasks/google/       Scheduled incremental sync
+  tasks/              Scheduled jobs (Google sync, duplicate scan)
 src/
   pages/              Home, Contacts, ContactDetail, Reminders, Import
   lib/importers.ts    LinkedIn / Google / generic CSV → contacts (parsed in the browser)

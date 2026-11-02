@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 const id = () =>
   text("id")
@@ -28,6 +28,8 @@ export const contacts = sqliteTable(
     /** Denormalized max(interactions.occurred_at) for fast "reconnect" queries */
     lastInteractionAt: integer("last_interaction_at", { mode: "timestamp_ms" }),
     starred: integer("starred", { mode: "boolean" }).notNull().default(false),
+    /** Where the contact was first created: manual, google, linkedin, gmail, gcal, generic (CSV), ... */
+    source: text("source").notNull().default("manual"),
     archived: integer("archived", { mode: "boolean" }).notNull().default(false),
     createdAt: createdAt(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
@@ -140,6 +142,37 @@ export const duplicateDismissals = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.contactA, t.contactB] })],
 );
+
+/** Latest duplicate scan results (replaced as a whole by each scan); contactA < contactB. */
+export const duplicateCandidates = sqliteTable(
+  "duplicate_candidates",
+  {
+    contactA: text("contact_a")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    contactB: text("contact_b")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    score: real("score").notNull(),
+    confidence: text("confidence", { enum: ["high", "medium", "low"] }).notNull(),
+    reasons: text("reasons", { mode: "json" }).$type<string[]>().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.contactA, t.contactB] }), index("duplicate_candidates_score_idx").on(t.score)],
+);
+
+/**
+ * Background jobs (one row per job name): a claim lock so only one run happens at
+ * a time, plus the outcome and an input fingerprint for skipping no-op runs.
+ */
+export const jobs = sqliteTable("jobs", {
+  name: text("name").primaryKey(),
+  status: text("status", { enum: ["idle", "running", "failed"] }).notNull().default("idle"),
+  startedAt: integer("started_at", { mode: "timestamp_ms" }),
+  finishedAt: integer("finished_at", { mode: "timestamp_ms" }),
+  error: text("error"),
+  fingerprint: text("fingerprint"),
+  result: text("result", { mode: "json" }).$type<Record<string, unknown>>(),
+});
 
 /**
  * Connected accounts (currently Google). Tokens are encrypted at rest; `state`

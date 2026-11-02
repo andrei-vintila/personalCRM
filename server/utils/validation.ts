@@ -122,4 +122,10 @@ export const mergeSchema = z.object({
     .default({}),
 });
 
-export const dismissSchema = z.object({ contactIds: z.tuple([z.string().min(1), z.string().min(1)]) });
+/** Pairs to mark "not the same person" (one pair, a member vs. the rest of a group, or a whole group). */
+export const dismissSchema = z.object({
+  pairs: z
+    .array(z.tuple([z.string().min(1), z.string().min(1)]).refine(([a, b]) => a !== b, "A pair needs two different contacts"))
+    .min(1)
+    .max(45),
+});

@@ -6,6 +6,7 @@ import { formatBirthday, relativeTime } from "../lib/format";
 import { Avatar, Badge, Card, CardHeader, Empty } from "../components/ui";
 import { ReminderRow } from "./Reminders";
 import { InteractionRow } from "./ContactDetail";
+import { SourceIcons } from "../components/SourceIcons";
 
 export function HomePage() {
   const { data } = useQuery({ queryKey: ["home"], queryFn: () => api<HomeData>("/home") });
@@ -41,7 +42,10 @@ export function HomePage() {
                   <Link to={`/contacts/${c.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
                     <Avatar name={c.name} src={c.avatarUrl} size={32} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">{c.name}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate text-sm font-medium">{c.name}</span>
+                        <SourceIcons sources={c.sources} />
+                      </div>
                       <div className="truncate text-xs text-zinc-500">Last talked {relativeTime(c.lastInteractionAt)}</div>
                     </div>
                     <Badge tone="warn">due {relativeTime(c.dueAt)}</Badge>
@@ -76,7 +80,10 @@ export function HomePage() {
                   <li key={b.id}>
                     <Link to={`/contacts/${b.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
                       <Avatar name={b.name} src={b.avatarUrl} size={28} />
-                      <span className="flex-1 truncate text-sm font-medium">{b.name}</span>
+                      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                        <span className="truncate text-sm font-medium">{b.name}</span>
+                        <SourceIcons sources={b.sources} />
+                      </span>
                       <span className="text-xs text-zinc-500">
                         {formatBirthday(b.birthday)} · {b.inDays === 0 ? "today" : `in ${b.inDays}d`}
                       </span>

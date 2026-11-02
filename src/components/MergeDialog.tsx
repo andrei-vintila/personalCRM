@@ -5,6 +5,7 @@ import { Check } from "lucide-react";
 import { api, type ContactDetail, type ContactSummary } from "../lib/api";
 import { formatBirthday } from "../lib/format";
 import { Avatar, Badge, Button, cx, Dialog, ErrorText, Input } from "./ui";
+import { SourceIcons } from "./SourceIcons";
 
 /** The parts of a contact the merge screen needs (works for list rows and details). */
 export interface MergeCandidate {
@@ -18,6 +19,7 @@ export interface MergeCandidate {
   about: string | null;
   createdAt: string;
   tags: string[];
+  sources: string[];
   identities: { kind: string; value: string }[];
 }
 
@@ -65,6 +67,7 @@ function MergeForm({
     () => [...candidates].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0].id,
   );
   const primary = candidates.find((c) => c.id === primaryId)!;
+  const stacked = candidates.length > 2;
 
   const conflicts = pickable
     .map(({ key, label }) => ({ key, label, values: [...new Set(candidates.map((c) => c[key]).filter((v): v is string => Boolean(v)))] }))
@@ -99,7 +102,8 @@ function MergeForm({
     <div className="space-y-5">
       <div>
         <p className="mb-2 text-xs font-medium text-zinc-600 dark:text-zinc-400">Keep this record</p>
-        <div className="grid gap-2 sm:grid-cols-2">
+        {/* Two records sit side by side; three or more stack vertically. */}
+        <div className={cx("grid gap-2", !stacked && "sm:grid-cols-2")}>
           {candidates.map((c) => (
             <button
               key={c.id}
@@ -111,7 +115,10 @@ function MergeForm({
             >
               <Avatar name={c.name} src={c.avatarUrl} />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{c.name}</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-sm font-medium">{c.name}</span>
+                  <SourceIcons sources={c.sources} />
+                </div>
                 <div className="truncate text-xs text-zinc-500">
                   {[c.title, c.company].filter(Boolean).join(" · ") || c.identities[0]?.value || "No details"}
                 </div>
@@ -128,7 +135,7 @@ function MergeForm({
           {conflicts.map((f) => (
             <fieldset key={f.key} className="space-y-1">
               <legend className="text-xs text-zinc-500">{f.label}</legend>
-              <div className="flex flex-wrap gap-2">
+              <div className={cx("flex gap-2", stacked ? "flex-col items-start" : "flex-wrap")}>
                 {f.values.map((value) => (
                   <label
                     key={value}
@@ -223,7 +230,10 @@ export function MergeWithDialog({ open, onClose, contact }: { open: boolean; onC
                 >
                   <Avatar name={c.name} src={c.avatarUrl} size={28} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{c.name}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate text-sm font-medium">{c.name}</span>
+                      <SourceIcons sources={c.sources} />
+                    </span>
                     <span className="block truncate text-xs text-zinc-500">
                       {[c.title, c.company].filter(Boolean).join(" · ") || c.email || c.phone}
                     </span>

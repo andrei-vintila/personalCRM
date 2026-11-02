@@ -6,6 +6,7 @@ import { api, type ContactSummary, type TagCount } from "../lib/api";
 import { relativeTime } from "../lib/format";
 import { Avatar, Badge, Card, cx, Empty, Input, Select } from "../components/ui";
 import { useDuplicates } from "./Duplicates";
+import { SourceIcons } from "../components/SourceIcons";
 
 const filters = [
   { id: "all", label: "All" },
@@ -50,7 +51,8 @@ export function ContactsPage() {
           className="flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-900 ring-1 ring-amber-200 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-900"
         >
           <Copy className="size-4" />
-          {duplicates.data!.total} possible {duplicates.data!.total === 1 ? "duplicate" : "duplicates"}
+          {duplicates.data!.total}
+          {duplicates.data!.capped && "+"} possible {duplicates.data!.total === 1 ? "duplicate" : "duplicates"}
           <span className="ml-auto font-medium">Review →</span>
         </Link>
       )}
@@ -106,6 +108,7 @@ export function ContactsPage() {
                     <div className="flex items-center gap-1.5">
                       <span className="truncate text-sm font-medium">{c.name}</span>
                       {c.starred && <Star className="size-3.5 fill-amber-400 text-amber-400" />}
+                      <SourceIcons sources={c.sources} className="ml-1" />
                     </div>
                     <div className="truncate text-xs text-zinc-500">
                       {[c.title, c.company].filter(Boolean).join(" · ") || c.email || c.phone || " "}

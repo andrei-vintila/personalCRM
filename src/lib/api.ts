@@ -21,7 +21,7 @@ export interface HomeData {
   reconnect: ContactSummary[];
   recent: InteractionItem[];
   reminders: ReminderItem[];
-  birthdays: { id: string; name: string; avatarUrl: string | null; birthday: string; inDays: number }[];
+  birthdays: { id: string; name: string; avatarUrl: string | null; birthday: string; inDays: number; sources: string[] }[];
   stats: { contacts: number; tracked: number | null; interactionsLast30: number };
 }
 
