@@ -1,0 +1,9 @@
+services:
+  crm:
+    build: .
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    environment:
+      APP_PASSWORD: ${APP_PASSWORD:?set APP_PASSWORD in .env}
+    volumes:
+      - ./data:/data

@@ -1,0 +1,9 @@
+node_modules
+.output
+.nitro
+.wrangler
+dist
+data/*.db*
+.env
+.dev.vars
+.DS_Store
