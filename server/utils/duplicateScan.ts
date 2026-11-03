@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { contacts, duplicateCandidates, duplicateDismissals, jobs } from "../db/schema";
 import { sourceColumns, withSources } from "./contacts";
 import { chunk, insertChunks, runBatch, type DB } from "./db";
-import { findDuplicatePairs, pairKey } from "./duplicates";
+import { clusterPairs, findDuplicatePairs, pairKey, RULES_VERSION } from "./duplicates";
 
 /**
  * Duplicate detection runs as a background job (cron, or on request from the UI)
@@ -28,7 +28,7 @@ export async function contactsFingerprint(db: DB): Promise<string> {
     })
     .from(contacts);
   // Dismissals aren't included: dismissing deletes the stored pair directly.
-  return [row.contacts, row.updated, row.identities, row.identitiesAdded].join(":");
+  return [`v${RULES_VERSION}`, row.contacts, row.updated, row.identities, row.identitiesAdded].join(":");
 }
 
 export async function getScanJob(db: DB): Promise<ScanJob | undefined> {
@@ -110,27 +110,7 @@ export async function scanIfStale(db: DB): Promise<"skipped" | "busy" | "scanned
 export async function listDuplicateGroups(db: DB, limit: number) {
   const candidates = await db.select().from(duplicateCandidates).orderBy(desc(duplicateCandidates.score));
 
-  // Union-find over candidate pairs.
-  const parent = new Map<string, string>();
-  const find = (id: string): string => {
-    let root = id;
-    while (parent.get(root) !== root) root = parent.get(root)!;
-    parent.set(id, root);
-    return root;
-  };
-  for (const c of candidates) {
-    for (const id of [c.contactA, c.contactB]) if (!parent.has(id)) parent.set(id, id);
-    const [a, b] = [find(c.contactA), find(c.contactB)];
-    if (a !== b) parent.set(b, a);
-  }
-  const clusters = new Map<string, typeof candidates>();
-  for (const c of candidates) {
-    const root = find(c.contactA);
-    if (!clusters.has(root)) clusters.set(root, []);
-    clusters.get(root)!.push(c);
-  }
-
-  const groups = [...clusters.values()]
+  const groups = clusterPairs(candidates)
     // Candidates are score-sorted, so each cluster's first pair is its strongest.
     .sort((x, y) => y[0].score - x[0].score);
   const top = groups.slice(0, limit);

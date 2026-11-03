@@ -23,6 +23,8 @@ export interface DuplicatePair {
 }
 
 const MIN_SCORE = 0.5;
+/** Bump when scoring changes so stored results are rescanned (see contactsFingerprint). */
+export const RULES_VERSION = 2;
 /** Very common keys (e.g. first name "john") would explode into many weak pairs. */
 const MAX_BLOCK = 60;
 const MAX_EXACT_BLOCK = 500;
@@ -103,8 +105,19 @@ export function normalizeName(name: string) {
     .join(" ");
 }
 
+/**
+ * The name to compare. Contacts created from an email or phone often carry it as
+ * their name: "ionut.lecu@corp.com" compares as "ionut lecu", "+40 712…" as nothing.
+ */
+function nameForMatching(name: string) {
+  const trimmed = name.trim();
+  if (/^\S+@\S+$/.test(trimmed)) return normalizeName(trimmed.split("@")[0].replace(/[._+-]+/g, " ").replace(/\d+/g, " "));
+  if (!/\p{L}/u.test(trimmed)) return "";
+  return normalizeName(trimmed);
+}
+
 function prepare(c: DedupeContact): Prepared {
-  const full = normalizeName(c.name);
+  const full = nameForMatching(c.name);
   const tokens = full.split(" ").filter(Boolean);
   const first = tokens[0] ?? "";
   const last = tokens.length > 1 ? tokens[tokens.length - 1] : "";
@@ -144,18 +157,21 @@ function scorePair(a: Prepared, b: Prepared): { score: number; reasons: string[]
     if (value > score) score = value;
     reasons.push(reason);
   };
+  const sameCompany = Boolean(a.company && a.company === b.company);
 
   const sharedPhone = a.phones.some((p) => b.phones.includes(p));
   if (sharedPhone) bump(0.9, "Same phone number in a different format");
 
-  if (a.full && a.full === b.full) bump(a.tokens.length > 1 ? 0.85 : 0.5, "Same name");
-  else if (a.last && a.last === b.last && a.canonFirst === b.canonFirst) {
+  if (a.full && a.full === b.full) {
+    // A one-word name ("Mihai") is as ambiguous as a bare first name.
+    if (a.tokens.length > 1) bump(0.85, "Same name");
+    else if (sameCompany) bump(0.5, "Same name");
+  } else if (a.last && a.last === b.last && a.canonFirst === b.canonFirst) {
     bump(0.8, a.first === b.first ? "Same first and last name" : `Same last name, ${a.first} / ${b.first}`);
   } else if (a.last && a.last === b.last && (isInitialOf(a.first, b.first) || isInitialOf(b.first, a.first))) {
     bump(0.6, "Same last name and initial");
-  } else if (a.tokens.length === 1 && a.first === b.first && b.tokens.length > 1) {
-    bump(0.5, "First name only");
-  } else if (b.tokens.length === 1 && b.first === a.first && a.tokens.length > 1) {
+  } else if (sameCompany && a.first === b.first && (a.tokens.length === 1) !== (b.tokens.length === 1)) {
+    // A bare first name matches everyone with that first name; only a shared company narrows it.
     bump(0.5, "First name only");
   } else if (a.full.length >= 8 && b.full.length >= 8) {
     const limit = Math.min(a.full.length, b.full.length) >= 14 ? 2 : 1;
@@ -164,10 +180,22 @@ function scorePair(a: Prepared, b: Prepared): { score: number; reasons: string[]
 
   const sharedLocal = a.emailLocals.find((l) => b.emailLocals.includes(l));
   if (sharedLocal) bump(0.7, `Same email username (${sharedLocal}@…)`);
+  if (score === 0) return { score, reasons };
 
-  if (score > 0 && a.company && a.company === b.company) {
+  if (sameCompany) {
     score = Math.min(1, score + 0.1);
     reasons.push("Same company");
+  }
+  // A name-only match is weaker when the details that are there disagree.
+  if (!sharedPhone && !sharedLocal) {
+    if (a.phones.length > 0 && b.phones.length > 0) {
+      score -= 0.15;
+      reasons.push("Different phone numbers");
+    }
+    if (a.company && b.company && !sameCompany) {
+      score -= 0.1;
+      reasons.push("Different companies");
+    }
   }
   return { score, reasons };
 }
@@ -243,4 +271,39 @@ export function findDuplicatePairs(contacts: DedupeContact[], dismissed: Set<str
     }
   }
   return pairs.sort((x, y) => y.score - x.score);
+}
+
+/**
+ * Groups candidate pairs, strongest first. Two groups join only when most of the
+ * possible pairs between them were found, so one contact that loosely matches
+ * several others (a bare "Ionut") can't chain unrelated people together. A pair
+ * that can't join its contacts' groups is listed on its own.
+ */
+export function clusterPairs<T extends { contactA: string; contactB: string; score: number }>(candidates: T[]): T[][] {
+  const linked = new Set(candidates.map((c) => pairKey(c.contactA, c.contactB)));
+  const clusterOf = new Map<string, Set<string>>();
+  const pairsOf = new Map<Set<string>, T[]>();
+  const standalone: T[][] = [];
+
+  for (const c of candidates) {
+    const a = clusterOf.get(c.contactA) ?? new Set([c.contactA]);
+    const b = clusterOf.get(c.contactB) ?? new Set([c.contactB]);
+    if (a === b) {
+      pairsOf.get(a)!.push(c);
+      continue;
+    }
+    let found = 0;
+    for (const x of a) for (const y of b) if (linked.has(pairKey(x, y))) found++;
+    if (found * 2 <= a.size * b.size) {
+      standalone.push([c]);
+      continue;
+    }
+    const merged = new Set([...a, ...b]);
+    pairsOf.set(merged, [...(pairsOf.get(a) ?? []), ...(pairsOf.get(b) ?? []), c]);
+    pairsOf.delete(a);
+    pairsOf.delete(b);
+    for (const id of merged) clusterOf.set(id, merged);
+  }
+  // Candidates are score-sorted, so each group's first pair is its strongest.
+  return [...pairsOf.values(), ...standalone];
 }
