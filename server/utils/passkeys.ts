@@ -1,18 +1,16 @@
-import {
-  generateAuthenticationOptions,
-  generateRegistrationOptions,
-  verifyAuthenticationResponse,
-  verifyRegistrationResponse,
-  type AuthenticationResponseJSON,
-  type RegistrationResponseJSON,
-} from "@simplewebauthn/server";
-import { isoBase64URL } from "@simplewebauthn/server/helpers";
+import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
 import { eq } from "drizzle-orm";
 import { getSession, HTTPError, updateSession, type H3Event } from "nitro/h3";
 import { passkeys } from "../db/schema";
 import { sessionConfig, type SessionData } from "./auth";
 import type { DB } from "./db";
 import { getEnv } from "./env";
+
+/** Loaded on first use, keeping the WebAuthn and certificate libraries out of other routes. */
+async function webauthn() {
+  const [server, { isoBase64URL }] = await Promise.all([import("@simplewebauthn/server"), import("@simplewebauthn/server/helpers")]);
+  return { ...server, isoBase64URL };
+}
 
 /** How long a challenge stays valid between the options and verify calls. */
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
@@ -52,6 +50,7 @@ export function listPasskeys(db: DB) {
 }
 
 export async function registrationOptions(event: H3Event, db: DB) {
+  const { generateRegistrationOptions } = await webauthn();
   const { rpID } = relyingParty(event);
   const existing = await db.select({ id: passkeys.id, transports: passkeys.transports }).from(passkeys);
   const options = await generateRegistrationOptions({
@@ -70,6 +69,7 @@ export async function registrationOptions(event: H3Event, db: DB) {
 }
 
 export async function registerPasskey(event: H3Event, db: DB, name: string, response: RegistrationResponseJSON) {
+  const { verifyRegistrationResponse, isoBase64URL } = await webauthn();
   const { origin, rpID } = relyingParty(event);
   const verification = await verifyRegistrationResponse({
     response,
@@ -98,6 +98,7 @@ export async function registerPasskey(event: H3Event, db: DB, name: string, resp
 
 /** Options for a discoverable-credential sign-in: the authenticator offers its PRM passkeys. */
 export async function authenticationOptions(event: H3Event) {
+  const { generateAuthenticationOptions } = await webauthn();
   const options = await generateAuthenticationOptions({ rpID: relyingParty(event).rpID, userVerification: "preferred" });
   await storeChallenge(event, options.challenge);
   return options;
@@ -109,6 +110,7 @@ export async function verifyPasskeyLogin(event: H3Event, db: DB, response: Authe
   const [passkey] = await db.select().from(passkeys).where(eq(passkeys.id, response.id));
   if (!passkey) throw new HTTPError({ status: 401, message: "This passkey isn't registered with PRM" });
 
+  const { verifyAuthenticationResponse, isoBase64URL } = await webauthn();
   const { origin, rpID } = relyingParty(event);
   const verification = await verifyAuthenticationResponse({
     response,
