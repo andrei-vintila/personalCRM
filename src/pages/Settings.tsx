@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Check, Contact, Copy, Fingerprint, KeyRound, Laptop, Mail, RefreshCw, Sparkles, Trash2 } from "lucide-react";
-import { api } from "../lib/api";
+import { api, ApiError } from "../lib/api";
 import { addPasskey, defaultPasskeyName, isCancelled, passkeysSupported, type Passkey } from "../lib/passkeys";
 import { relativeTime } from "../lib/format";
 import { Badge, Button, Card, CardHeader, Empty, ErrorText, Input } from "../components/ui";
@@ -100,12 +100,20 @@ export function SettingsPage() {
   );
 }
 
+/** Gmail allows 15,000 quota units per user per minute; a step costs about 130, so ~40 steps a minute leaves plenty of room. */
+const GMAIL_STEP_MS = 1500;
+/** How many times to wait out a rate limit before giving up on "Sync now". */
+const MAX_RATE_LIMIT_WAITS = 10;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 function AccountRow({ account, autoStart }: { account: Account; autoStart: boolean }) {
   const queryClient = useQueryClient();
   const [progress, setProgress] = useState<{ kind: SyncKind; steps: number; contacts: number; interactions: number }>();
   const [running, setRunning] = useState(false);
   const [syncError, setSyncError] = useState<unknown>();
   const [started, setStarted] = useState(false);
+  const [waiting, setWaiting] = useState(false);
 
   const refresh = () => queryClient.invalidateQueries();
 
@@ -114,20 +122,37 @@ function AccountRow({ account, autoStart }: { account: Account; autoStart: boole
     setSyncError(undefined);
     let contacts = 0;
     let interactions = 0;
+    let rateLimitWaits = 0;
+    const step = async (kind: SyncKind): Promise<StepResult> => {
+      for (;;) {
+        try {
+          return await api<StepResult>(`/integrations/${account.id}/sync`, { method: "POST", body: { kind } });
+        } catch (e) {
+          // Google's quota is per minute: wait it out and carry on from the same cursor.
+          if (!(e instanceof ApiError && e.status === 429) || ++rateLimitWaits > MAX_RATE_LIMIT_WAITS) throw e;
+          setWaiting(true);
+          await sleep(((e.data as { retryAfterSeconds?: number } | undefined)?.retryAfterSeconds ?? 60) * 1000);
+          setWaiting(false);
+        }
+      }
+    };
     try {
       for (const kind of ["contacts", "calendar", "gmail"] as SyncKind[]) {
         for (let steps = 1; steps <= 2000; steps++) {
-          const result = await api<StepResult>(`/integrations/${account.id}/sync`, { method: "POST", body: { kind } });
+          const startedAt = Date.now();
+          const result = await step(kind);
           contacts += result.contactsCreated;
           interactions += result.interactions;
           setProgress({ kind, steps, contacts, interactions });
           if (result.done) break;
+          if (kind === "gmail") await sleep(GMAIL_STEP_MS - (Date.now() - startedAt));
         }
       }
     } catch (e) {
       setSyncError(e);
     } finally {
       setRunning(false);
+      setWaiting(false);
       refresh();
     }
   };
@@ -195,7 +220,11 @@ function AccountRow({ account, autoStart }: { account: Account; autoStart: boole
 
       {progress && (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          {running ? `Syncing ${sourceMeta[progress.kind].label} (page ${progress.steps})… ` : "Sync finished: "}
+          {running
+            ? waiting
+              ? `Google asked to slow down. Continuing ${sourceMeta[progress.kind].label} in a minute… `
+              : `Syncing ${sourceMeta[progress.kind].label} (page ${progress.steps})… `
+            : "Sync finished: "}
           {progress.contacts} new contacts, {progress.interactions} interactions.
         </p>
       )}

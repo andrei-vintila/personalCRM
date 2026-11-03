@@ -3,6 +3,7 @@ import { defineHandler, getRouterParam, HTTPError, readValidatedBody } from "nit
 import { z } from "zod";
 import { integrations } from "../../../db/schema";
 import { useDb } from "../../../utils/db";
+import { GoogleApiError } from "../../../utils/google/client";
 import { backfillDays, requireGoogleConfig } from "../../../utils/google/http";
 import { runGoogleSyncStep, syncKinds } from "../../../utils/google/sync";
 
@@ -17,6 +18,9 @@ export default defineHandler(async (event) => {
     return await runGoogleSyncStep(db, requireGoogleConfig(event), integration, kind, { backfillDays: backfillDays(event) });
   } catch (error) {
     if (error instanceof HTTPError) throw error;
+    if (error instanceof GoogleApiError && error.rateLimited) {
+      throw new HTTPError({ status: 429, message: "Google's rate limit was reached", data: { retryAfterSeconds: 60 } });
+    }
     throw new HTTPError({ status: 502, message: error instanceof Error ? error.message : "Sync failed" });
   }
 });

@@ -34,9 +34,24 @@ export class GoogleApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** Google's error reason, e.g. rateLimitExceeded */
+    public reason?: string,
   ) {
     super(message);
   }
+
+  /** Per-user or per-project quota hit: wait and retry rather than treat as a failure. */
+  get rateLimited() {
+    return this.status === 429 || (this.status === 403 && /rateLimitExceeded|userRateLimitExceeded|quotaExceeded|RATE_LIMIT_EXCEEDED/.test(this.reason ?? ""));
+  }
+}
+
+type GoogleErrorBody = { error?: { message?: string; status?: string; errors?: { reason?: string }[]; details?: { reason?: string }[] } } | null;
+
+function googleError(status: number, body: GoogleErrorBody, fallback: string) {
+  const e = body?.error;
+  const reason = e?.errors?.[0]?.reason ?? e?.details?.find((d) => d.reason)?.reason ?? e?.status;
+  return new GoogleApiError(status, e?.message ?? fallback, reason);
 }
 
 export function authorizationUrl(config: GoogleConfig, redirectUri: string, state: string) {
@@ -128,15 +143,16 @@ export async function googleJson<T>(
   const url = googleUrl(config, host, path) + (query.size ? `?${query}` : "");
   const res = await fetch(url, { headers: { authorization: `Bearer ${accessToken}` } });
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-    throw new GoogleApiError(res.status, body?.error?.message ?? `${host} returned ${res.status}`);
+    throw googleError(res.status, (await res.json().catch(() => null)) as GoogleErrorBody, `${host} returned ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
 
 /**
  * Gmail batch endpoint: many GETs in one HTTP request (one Worker subrequest).
- * Returns parsed JSON bodies in request order; failed items are null.
+ * Returns parsed JSON bodies in request order; items that no longer exist are null.
+ * Any other failed item fails the whole call, so a sync step never advances its
+ * cursor past messages it couldn't read (rate limits hit individual items first).
  */
 export async function gmailBatchGet<T>(config: GoogleConfig, accessToken: string, paths: string[]): Promise<(T | null)[]> {
   if (paths.length === 0) return [];
@@ -151,7 +167,7 @@ export async function gmailBatchGet<T>(config: GoogleConfig, accessToken: string
     headers: { authorization: `Bearer ${accessToken}`, "content-type": `multipart/mixed; boundary=${boundary}` },
     body,
   });
-  if (!res.ok) throw new GoogleApiError(res.status, `Gmail batch request failed (${res.status})`);
+  if (!res.ok) throw googleError(res.status, (await res.json().catch(() => null)) as GoogleErrorBody, `Gmail batch request failed (${res.status})`);
 
   const responseBoundary = res.headers.get("content-type")?.match(/boundary=("?)([^";]+)\1/)?.[2];
   if (!responseBoundary) throw new GoogleApiError(502, "Gmail batch response had no boundary");
@@ -160,12 +176,19 @@ export async function gmailBatchGet<T>(config: GoogleConfig, accessToken: string
   for (const part of (await res.text()).split(`--${responseBoundary}`)) {
     const index = Number(part.match(/Content-ID:\s*<response-item(\d+)>/i)?.[1]);
     const status = Number(part.match(/HTTP\/[\d.]+ (\d{3})/)?.[1]);
-    if (Number.isNaN(index) || status === 401) {
-      if (status === 401) throw new GoogleApiError(401, "Access token expired");
-      continue;
-    }
-    if (status !== 200) continue;
+    if (Number.isNaN(index)) continue;
     const json = part.slice(part.indexOf("{"), part.lastIndexOf("}") + 1);
+    if (status === 401) throw new GoogleApiError(401, "Access token expired");
+    if (status === 404) continue;
+    if (status !== 200) {
+      let body: GoogleErrorBody = null;
+      try {
+        body = JSON.parse(json);
+      } catch {
+        // keep the generic message
+      }
+      throw googleError(status, body, `Gmail returned ${status} for a message in a batch`);
+    }
     try {
       results[index] = JSON.parse(json) as T;
     } catch {

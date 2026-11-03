@@ -82,9 +82,11 @@ export async function runGoogleSyncStep(
     const message =
       error instanceof GoogleApiError && /invalid_grant|expired or revoked/i.test(error.message)
         ? "Google access expired or was revoked. Reconnect the account."
-        : error instanceof Error
-          ? error.message
-          : String(error);
+        : error instanceof GoogleApiError && error.rateLimited
+          ? "Google's rate limit was reached. Sync picks up where it stopped in a minute or two."
+          : error instanceof Error
+            ? error.message
+            : String(error);
     await db.update(integrations).set({ lastError: `${kind}: ${message}` }).where(eq(integrations.id, integration.id));
     throw error;
   }
