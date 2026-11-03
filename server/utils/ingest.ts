@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { contactIdentities, contacts, contactTags, interactionContacts, interactions, tags, type IdentityKind, type InteractionType } from "../db/schema";
 import { refreshLastInteraction } from "./contacts";
-import { chunk, type DB } from "./db";
+import { chunk, insertChunks, type DB } from "./db";
 import { normalizeIdentity } from "./identity";
 
 /**
@@ -76,8 +76,8 @@ export async function importContacts(db: DB, opts: { source: string; tag?: strin
     }
   }
 
-  for (const batch of chunk(newContacts, 10)) await db.insert(contacts).values(batch);
-  for (const batch of chunk(newIdentities, 18)) await db.insert(contactIdentities).values(batch).onConflictDoNothing();
+  for (const batch of insertChunks(contacts, newContacts)) await db.insert(contacts).values(batch);
+  for (const batch of insertChunks(contactIdentities, newIdentities)) await db.insert(contactIdentities).values(batch).onConflictDoNothing();
 
   // Fill blank fields on matched contacts, but only issue updates where something changes.
   for (const ids of chunk([...matched.keys()], 90)) {
@@ -183,7 +183,7 @@ export async function upsertInteractions(db: DB, items: IncomingInteraction[]) {
   if (withContacts.length === 0) return 0;
 
   const idByKey = new Map<string, string>();
-  for (const batch of chunk(withContacts, 10)) {
+  for (const batch of insertChunks(interactions, withContacts)) {
     const rows = await db
       .insert(interactions)
       .values(
@@ -211,7 +211,7 @@ export async function upsertInteractions(db: DB, items: IncomingInteraction[]) {
   const links = withContacts.flatMap((i) =>
     [...new Set(i.contactIds)].map((contactId) => ({ interactionId: idByKey.get(`${i.source}:${i.externalId}`)!, contactId })),
   );
-  for (const batch of chunk(links, 45)) await db.insert(interactionContacts).values(batch).onConflictDoNothing();
+  for (const batch of insertChunks(interactionContacts, links)) await db.insert(interactionContacts).values(batch).onConflictDoNothing();
 
   await refreshLastInteraction(
     db,

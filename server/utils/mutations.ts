@@ -3,7 +3,7 @@ import { HTTPError } from "nitro/h3";
 import type { z } from "zod";
 import { contacts, interactionContacts, interactions, reminders } from "../db/schema";
 import { deleteOrphanTags, getContactDetail, refreshLastInteraction, setIdentities, setTags } from "./contacts";
-import type { DB } from "./db";
+import { insertChunks, type DB } from "./db";
 import type { contactInputSchema, contactPatchSchema, interactionInputSchema, reminderInputSchema } from "./validation";
 
 /** Writes shared by the REST API and the MCP server. */
@@ -46,7 +46,9 @@ export async function logInteraction(db: DB, input: z.infer<typeof interactionIn
     .insert(interactions)
     .values({ ...fields, occurredAt: occurredAt ?? new Date() })
     .returning();
-  await db.insert(interactionContacts).values(ids.map((contactId) => ({ interactionId: interaction.id, contactId })));
+  for (const batch of insertChunks(interactionContacts, ids)) {
+    await db.insert(interactionContacts).values(batch.map((contactId) => ({ interactionId: interaction.id, contactId })));
+  }
   await refreshLastInteraction(db, ids);
   return interaction;
 }

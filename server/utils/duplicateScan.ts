@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { contacts, duplicateCandidates, duplicateDismissals, jobs } from "../db/schema";
 import { sourceColumns, withSources } from "./contacts";
-import { chunk, runBatch, type DB } from "./db";
+import { chunk, insertChunks, runBatch, type DB } from "./db";
 import { findDuplicatePairs, pairKey } from "./duplicates";
 
 /**
@@ -14,7 +14,6 @@ const JOB = "duplicates";
 const STALE_LOCK_MS = 10 * 60_000;
 /** Only the best pairs are stored; keeps the write within D1's per-invocation query limit. */
 const MAX_STORED = 500;
-const INSERT_CHUNK = 20; // 5 params per row, D1 allows 100 per statement
 
 export type ScanJob = typeof jobs.$inferSelect;
 
@@ -68,7 +67,7 @@ export async function runDuplicateScan(db: DB) {
     // Replace results and finish the job in one transaction.
     await runBatch(db, [
       db.delete(duplicateCandidates),
-      ...chunk(stored, INSERT_CHUNK).map((batch) =>
+      ...insertChunks(duplicateCandidates, stored).map((batch) =>
         db.insert(duplicateCandidates).values(
           batch.map((p) => {
             const [contactA, contactB] = [...p.ids].sort();

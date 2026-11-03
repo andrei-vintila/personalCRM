@@ -11,7 +11,7 @@ import {
   type IdentityKind,
   type InteractionType,
 } from "../db/schema";
-import { chunk, type DB } from "./db";
+import { chunk, insertChunks, type DB } from "./db";
 import { normalizeIdentity } from "./identity";
 
 const DAY_MS = 86_400_000;
@@ -199,7 +199,7 @@ export async function setIdentities(db: DB, contactId: string, inputs: IdentityI
   }
 
   await db.delete(contactIdentities).where(eq(contactIdentities.contactId, contactId));
-  for (const batch of chunk(normalized, 15)) {
+  for (const batch of insertChunks(contactIdentities, normalized)) {
     await db.insert(contactIdentities).values(batch.map((i) => ({ ...i, contactId, source })));
   }
 }
@@ -208,12 +208,16 @@ export async function setIdentities(db: DB, contactId: string, inputs: IdentityI
 export async function addMissingIdentities(db: DB, contactId: string, inputs: IdentityInput[], source: string) {
   const normalized = dedupeIdentities(inputs);
   if (normalized.length === 0) return 0;
-  const inserted = await db
-    .insert(contactIdentities)
-    .values(normalized.map((i) => ({ ...i, contactId, source })))
-    .onConflictDoNothing()
-    .returning({ id: contactIdentities.id });
-  return inserted.length;
+  let added = 0;
+  for (const batch of insertChunks(contactIdentities, normalized)) {
+    const inserted = await db
+      .insert(contactIdentities)
+      .values(batch.map((i) => ({ ...i, contactId, source })))
+      .onConflictDoNothing()
+      .returning({ id: contactIdentities.id });
+    added += inserted.length;
+  }
+  return added;
 }
 
 export async function findContactByIdentities(db: DB, inputs: IdentityInput[]) {
@@ -232,12 +236,16 @@ export async function setTags(db: DB, contactId: string, names: string[]) {
   await db.delete(contactTags).where(eq(contactTags.contactId, contactId));
   if (wanted.length === 0) return;
 
-  await db
-    .insert(tags)
-    .values(wanted.map((name) => ({ name })))
-    .onConflictDoNothing();
+  for (const batch of insertChunks(tags, wanted)) {
+    await db
+      .insert(tags)
+      .values(batch.map((name) => ({ name })))
+      .onConflictDoNothing();
+  }
   const tagRows = await db.select({ id: tags.id }).from(tags).where(inArray(tags.name, wanted));
-  await db.insert(contactTags).values(tagRows.map((t) => ({ contactId, tagId: t.id })));
+  for (const batch of insertChunks(contactTags, tagRows)) {
+    await db.insert(contactTags).values(batch.map((t) => ({ contactId, tagId: t.id })));
+  }
 }
 
 /** Recomputes contacts.last_interaction_at from the interactions table (one statement per 90 contacts). */

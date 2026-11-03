@@ -1,6 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
+import { getTableColumns } from "drizzle-orm";
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
-import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+import type { BaseSQLiteDatabase, SQLiteTable } from "drizzle-orm/sqlite-core";
 import type { H3Event } from "nitro/h3";
 import * as schema from "../db/schema";
 import { cloudflareEnv, type CloudflareBindings } from "./env";
@@ -48,10 +49,21 @@ async function createNodeDb(): Promise<DB> {
 }
 
 /** D1 caps bound parameters at 100 per statement; keep bulk operations under it. */
+export const D1_MAX_PARAMS = 100;
+
 export function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
+}
+
+/**
+ * Splits rows for multi-row inserts into `table`. A row binds at most one parameter
+ * per column, so sizing by column count stays under D1's limit as the schema grows.
+ */
+export function insertChunks<T>(table: SQLiteTable, rows: T[]): T[][] {
+  const columns = Object.keys(getTableColumns(table)).length;
+  return chunk(rows, Math.max(1, Math.floor(D1_MAX_PARAMS / columns)));
 }
 
 /**
