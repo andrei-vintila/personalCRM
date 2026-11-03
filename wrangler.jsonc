@@ -3,14 +3,14 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "prm",
+  "account_id": "3b9847a3a0cfe3e0db63671e8ab61836",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "prm",
-      // Replace with the id printed by `npx wrangler d1 create prm`
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "411ce9e8-bbfd-444b-bfba-55356d669cf6",
       "migrations_dir": "drizzle"
     }
   ],
