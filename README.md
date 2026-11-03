@@ -86,6 +86,12 @@ The first sync runs from the Settings page and goes back `SYNC_BACKFILL_DAYS` (d
 
 OAuth tokens are encrypted in the database with a key derived from `GOOGLE_CLIENT_SECRET`. Disconnecting an account revokes the grant but keeps everything already synced.
 
+## Passkeys
+
+Once signed in with the password, add passkeys under **Settings → Passkeys** (Touch ID, Face ID, a phone or a security key). The sign-in screen then offers **Sign in with a passkey**; the password keeps working.
+
+Passkeys are tied to the hostname the app is served from. Behind a reverse proxy that changes the host or scheme, set `APP_URL` to the public URL. Moving to another domain means adding new passkeys.
+
 ## API tokens
 
 **Settings → API tokens** creates tokens for programmatic access. Send them as `Authorization: Bearer prm_…` to any `/api/*` route or to `/mcp`. Only a SHA-256 hash is stored, and each token is shown once. Tokens can't create or revoke tokens; that needs a signed-in browser session.
@@ -188,4 +194,4 @@ src/
 - **No interactive transactions.** D1 doesn't support them from a Worker, so routes do sequential writes and undo by hand where it matters.
 - **Imports run in batches of 25** from the browser, which keeps each request well under D1's per-invocation query limit (50 on the free plan).
 - **Interactions have `source` + `external_id`** (unique together), so syncs (Gmail thread id, Calendar event id) can re-run without duplicating anything.
-- **Auth is single-user:** one `APP_PASSWORD`, sealed cookie session. On Cloudflare you can also put the app behind Cloudflare Access.
+- **Auth is single-user:** one `APP_PASSWORD` plus optional passkeys, sealed cookie session. On Cloudflare you can also put the app behind Cloudflare Access.

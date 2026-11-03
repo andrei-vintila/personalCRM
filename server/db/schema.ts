@@ -157,6 +157,20 @@ export const apiTokens = sqliteTable("api_tokens", {
   lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
 });
 
+/** WebAuthn credentials that can sign in instead of the password. */
+export const passkeys = sqliteTable("passkeys", {
+  /** Credential ID, base64url */
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  /** COSE public key, base64url */
+  publicKey: text("public_key").notNull(),
+  counter: integer("counter").notNull().default(0),
+  /** Comma-separated authenticator transports (internal, hybrid, usb…) */
+  transports: text("transports"),
+  createdAt: createdAt(),
+  lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+});
+
 /** Latest duplicate scan results (replaced as a whole by each scan); contactA < contactB. */
 export const duplicateCandidates = sqliteTable(
   "duplicate_candidates",

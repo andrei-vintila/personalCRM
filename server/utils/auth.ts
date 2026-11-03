@@ -1,10 +1,17 @@
 import { HTTPError, type H3Event, type SessionConfig } from "nitro/h3";
 import { getEnv } from "./env";
 
+export interface SessionData {
+  user?: string;
+  /** Pending WebAuthn challenge (see passkeys.ts) */
+  challenge?: string;
+  challengeExpires?: number;
+}
+
 /**
  * Single-user auth: one APP_PASSWORD, sealed session cookie. The cookie secret is
  * derived from the password (or SESSION_SECRET if set), so changing the password
- * signs everyone out.
+ * signs everyone out. Passkeys (passkeys.ts) are an alternative way into the same session.
  */
 export async function sessionConfig(event: H3Event): Promise<SessionConfig> {
   const password = getEnv(event, "APP_PASSWORD");

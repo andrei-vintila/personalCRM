@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { NavLink, Outlet } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Contact, Home, LogOut, Plus, Settings, Upload } from "lucide-react";
+import { Bell, Contact, Fingerprint, Home, LogOut, Plus, Settings, Upload } from "lucide-react";
 import { api } from "../lib/api";
+import { isCancelled, passkeysSupported, signInWithPasskey } from "../lib/passkeys";
 import { Button, cx, ErrorText, Input } from "./ui";
 import { ContactFormDialog } from "./ContactForm";
 
@@ -92,6 +93,10 @@ function Login() {
     mutationFn: () => api("/auth/login", { method: "POST", body: { password } }),
     onSuccess: () => queryClient.invalidateQueries(),
   });
+  const passkey = useMutation({
+    mutationFn: signInWithPasskey,
+    onSuccess: () => queryClient.invalidateQueries(),
+  });
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -106,7 +111,7 @@ function Login() {
             ◎
           </span>
           <h1 className="text-xl font-semibold">PRM</h1>
-          <p className="text-sm text-zinc-500">Enter your password to continue.</p>
+          <p className="text-sm text-zinc-500">Enter your password or use a passkey.</p>
         </div>
         <Input
           type="password"
@@ -116,10 +121,16 @@ function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        <ErrorText error={login.error} />
+        <ErrorText error={login.error ?? (isCancelled(passkey.error) ? null : passkey.error)} />
         <Button type="submit" variant="primary" className="w-full" disabled={!password || login.isPending}>
           Sign in
         </Button>
+        {passkeysSupported() && (
+          <Button type="button" className="w-full" disabled={passkey.isPending} onClick={() => passkey.mutate()}>
+            <Fingerprint className="size-4" />
+            Sign in with a passkey
+          </Button>
+        )}
       </form>
     </div>
   );

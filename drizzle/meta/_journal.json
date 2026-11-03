@@ -43,6 +43,13 @@
       "when": 1793633101738,
       "tag": "0005_api_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793700708986,
+      "tag": "0006_passkeys",
+      "breakpoints": true
     }
   ]
 }

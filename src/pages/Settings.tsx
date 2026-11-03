@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Check, Contact, Copy, KeyRound, Laptop, Mail, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { CalendarDays, Check, Contact, Copy, Fingerprint, KeyRound, Laptop, Mail, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
+import { addPasskey, defaultPasskeyName, isCancelled, passkeysSupported, type Passkey } from "../lib/passkeys";
 import { relativeTime } from "../lib/format";
 import { Badge, Button, Card, CardHeader, Empty, ErrorText, Input } from "../components/ui";
 
@@ -91,6 +92,7 @@ export function SettingsPage() {
         </ul>
       </Card>
 
+      <PasskeysCard />
       <ApiTokensCard />
       <McpCard />
       <MacConnectorCard />
@@ -254,6 +256,68 @@ function CodeBlock({ children }: { children: string }) {
       <pre className="min-w-0 flex-1 overflow-x-auto py-1.5 text-xs whitespace-pre">{children}</pre>
       <CopyButton text={children} />
     </div>
+  );
+}
+
+function PasskeysCard() {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState(defaultPasskeyName);
+  const passkeys = useQuery({ queryKey: ["passkeys"], queryFn: () => api<Passkey[]>("/passkeys") });
+
+  const add = useMutation({
+    mutationFn: () => addPasskey(name.trim()),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["passkeys"] }),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api(`/passkeys/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["passkeys"] }),
+  });
+
+  return (
+    <Card>
+      <CardHeader title="Passkeys" icon={<Fingerprint className="size-4 text-accent-600" />} />
+      <div className="space-y-3 p-4">
+        <p className="text-sm text-zinc-500">
+          Sign in with Touch ID, Face ID, your phone or a security key instead of the password. The password keeps working too.
+        </p>
+        {passkeysSupported() ? (
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              add.mutate();
+            }}
+          >
+            <Input placeholder="Passkey name, e.g. MacBook" value={name} onChange={(e) => setName(e.target.value)} />
+            <Button type="submit" variant="primary" className="shrink-0 whitespace-nowrap" disabled={!name.trim() || add.isPending}>
+              Add passkey
+            </Button>
+          </form>
+        ) : (
+          <p className="text-sm text-zinc-500">This browser doesn't support passkeys.</p>
+        )}
+        <ErrorText error={(isCancelled(add.error) ? null : add.error) ?? remove.error} />
+      </div>
+      {passkeys.data && passkeys.data.length > 0 && (
+        <ul className="divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-zinc-800 dark:border-zinc-800">
+          {passkeys.data.map((p) => (
+            <li key={p.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+              <span className="font-medium">{p.name}</span>
+              <span className="text-xs text-zinc-500">Added {relativeTime(p.createdAt)}</span>
+              <span className="ml-auto text-xs text-zinc-500">{p.lastUsedAt ? `Used ${relativeTime(p.lastUsedAt)}` : "Never used"}</span>
+              <Button
+                size="sm"
+                variant="danger"
+                aria-label={`Remove ${p.name}`}
+                onClick={() => confirm(`Remove “${p.name}”? It can no longer sign in to PRM.`) && remove.mutate(p.id)}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 
