@@ -40,6 +40,14 @@ export class GoogleApiError extends Error {
     super(message);
   }
 
+  /**
+   * A People API sync token older than 7 days. Google documents this as 410 but
+   * actually answers 400 FAILED_PRECONDITION with reason EXPIRED_SYNC_TOKEN.
+   */
+  get syncTokenExpired() {
+    return this.status === 410 || this.reason === "EXPIRED_SYNC_TOKEN" || /sync token is expired/i.test(this.message);
+  }
+
   /** Per-user or per-project quota hit: wait and retry rather than treat as a failure. */
   get rateLimited() {
     return this.status === 429 || (this.status === 403 && /rateLimitExceeded|userRateLimitExceeded|quotaExceeded|RATE_LIMIT_EXCEEDED/.test(this.reason ?? ""));

@@ -134,7 +134,7 @@ async function syncContactsStep(ctx: StepContext) {
     });
   } catch (error) {
     // Sync tokens expire after 7 days; start a fresh full pass.
-    if (error instanceof GoogleApiError && error.status === 410) {
+    if (error instanceof GoogleApiError && error.syncTokenExpired) {
       ctx.state.contacts = { initialDone: s.initialDone };
       return { done: false, processed: 0, contactsCreated: 0, interactions: 0 };
     }
