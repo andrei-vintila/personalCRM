@@ -50,6 +50,27 @@ struct SyncView: View {
       }
 
       Section {
+        VStack(alignment: .leading, spacing: 4) {
+          Toggle(isOn: Binding(get: { sync.birthdaysEnabled }, set: { sync.setBirthdaysEnabled($0, app: app) })) {
+            Label("Birthdays from Contacts", systemImage: "gift").fontWeight(.medium)
+          }
+          Text("Adds birthdays from the Contacts app to people already in PRM, matched by email or phone. Nobody new is created, and birthdays you've set are kept.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+          if let error = sync.birthdayStatus.error {
+            Label(error, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
+          } else if let lastRun = sync.birthdayStatus.lastRun, sync.birthdaysEnabled {
+            Text("\(sync.birthdayStatus.summary ?? "Synced") · \(lastRun.relative)").font(.caption).foregroundStyle(.secondary)
+          }
+        }
+        .padding(.vertical, 2)
+      } header: {
+        Text("Contacts")
+      } footer: {
+        Text("Needs Contacts access, which macOS asks for when you switch this on. Full Disk Access isn't needed for it.")
+      }
+
+      Section {
         Toggle("Sync automatically every 30 minutes", isOn: $sync.autoSync)
         HStack {
           Button {

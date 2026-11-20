@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { integrations, type Integration } from "../../db/schema";
+import { normalizeBirthday } from "../birthdays";
 import type { DB } from "../db";
 import { importContacts, resolveParticipants, upsertInteractions, type IncomingContact, type IncomingInteraction, type Participant } from "../ingest";
 import { accessTokenFor, GoogleApiError, googleJson, gmailBatchGet, type GoogleConfig } from "./client";
@@ -114,7 +115,7 @@ interface Person {
   emailAddresses?: { value?: string }[];
   phoneNumbers?: { value?: string; canonicalForm?: string }[];
   organizations?: { name?: string; title?: string }[];
-  birthdays?: { date?: { year?: number; month?: number; day?: number } }[];
+  birthdays?: { date?: { year?: number; month?: number; day?: number }; text?: string }[];
   urls?: { value?: string }[];
   photos?: { url?: string; default?: boolean }[];
   biographies?: { value?: string }[];
@@ -159,8 +160,13 @@ function personToContact(p: Person): IncomingContact | null {
   const name = p.names?.[0]?.displayName?.trim() || p.organizations?.[0]?.name || emails[0];
   if (!name) return null;
 
-  const birthday = p.birthdays?.find((b) => b.date?.month && b.date?.day)?.date;
   const pad = (n: number) => String(n).padStart(2, "0");
+  // Prefer a structured date (with a year if any entry has one); fall back to free text like "April 21".
+  const dated = (p.birthdays ?? []).map((b) => b.date).filter((d) => d?.month && d?.day);
+  const date = dated.find((d) => d!.year) ?? dated[0];
+  const birthday = date
+    ? normalizeBirthday(`${date.year ? date.year : "-"}-${pad(date.month!)}-${pad(date.day!)}`)
+    : (p.birthdays ?? []).map((b) => normalizeBirthday(b.text)).find(Boolean) ?? null;
   const city = p.addresses?.find((a) => a.city)?.city;
 
   return {
@@ -170,7 +176,7 @@ function personToContact(p: Person): IncomingContact | null {
     location: city ?? null,
     about: p.biographies?.[0]?.value ?? null,
     avatarUrl: p.photos?.find((ph) => ph.url && !ph.default)?.url ?? null,
-    birthday: birthday ? `${birthday.year ?? "-"}-${pad(birthday.month!)}-${pad(birthday.day!)}` : null,
+    birthday,
     identities: [
       ...emails.map((value) => ({ kind: "email" as const, value })),
       ...(p.phoneNumbers ?? [])

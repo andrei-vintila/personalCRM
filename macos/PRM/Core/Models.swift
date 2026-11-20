@@ -105,6 +105,53 @@ struct Interaction: Codable, Hashable, Identifiable, Sendable {
   let contacts: [ContactRef]
 }
 
+/// One celebration of someone's birthday, shown among timeline entries.
+struct BirthdayEvent: Codable, Hashable, Sendable {
+  /// YYYY-MM-DD
+  let date: String
+  let age: Int?
+  /// Set in the Home feed, where entries are about different people.
+  let contact: ContactRef?
+
+  /// The day in the local calendar (a birthday isn't an instant, so no time zone shift).
+  var day: Date {
+    let parts = date.split(separator: "-").compactMap { Int($0) }
+    guard parts.count == 3 else { return .distantPast }
+    return Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2])) ?? .distantPast
+  }
+
+  /// Days from today: 0 today, negative in the past.
+  var daysFromToday: Int {
+    let calendar = Calendar.current
+    return calendar.dateComponents([.day], from: calendar.startOfDay(for: Date()), to: day).day ?? 0
+  }
+}
+
+enum TimelineEntry: Identifiable, Hashable {
+  case interaction(Interaction)
+  case birthday(BirthdayEvent)
+
+  var id: String {
+    switch self {
+    case .interaction(let i): "interaction:\(i.id)"
+    case .birthday(let b): "birthday:\(b.contact?.id ?? ""):\(b.date)"
+    }
+  }
+
+  /// Birthdays sort at the end of their day, above that day's interactions.
+  var sortDate: Date {
+    switch self {
+    case .interaction(let i): i.occurredAt
+    case .birthday(let b): b.day.addingTimeInterval(86_399)
+    }
+  }
+
+  /// Newest first; upcoming birthdays end up on top.
+  static func merge(_ interactions: [Interaction], _ birthdays: [BirthdayEvent]) -> [TimelineEntry] {
+    (interactions.map(TimelineEntry.interaction) + birthdays.map(TimelineEntry.birthday)).sorted { $0.sortDate > $1.sortDate }
+  }
+}
+
 struct Reminder: Codable, Hashable, Identifiable, Sendable {
   let id: String
   let contactId: String?
@@ -132,10 +179,13 @@ struct ContactDetail: Codable, Hashable, Identifiable, Sendable {
   let tags: [String]
   let reminders: [Reminder]
   let interactions: [Interaction]
+  /// Optional so older servers still decode.
+  let birthdays: [BirthdayEvent]?
   let dueAt: Double?
   let sources: [String]
 
   var subtitle: String { [title, company].compactMap { $0 }.joined(separator: " at ") }
+  var timeline: [TimelineEntry] { TimelineEntry.merge(interactions, birthdays ?? []) }
   var openReminders: [Reminder] { reminders.filter { $0.completedAt == nil } }
 }
 
@@ -157,7 +207,11 @@ struct HomeData: Codable, Sendable {
   let recent: [Interaction]
   let reminders: [Reminder]
   let birthdays: [Birthday]
+  /// Birthdays that passed within the span `recent` covers. Optional so older servers still decode.
+  let birthdayEvents: [BirthdayEvent]?
   let stats: Stats
+
+  var timeline: [TimelineEntry] { TimelineEntry.merge(recent, birthdayEvents ?? []) }
 }
 
 struct TagCount: Codable, Hashable, Sendable {

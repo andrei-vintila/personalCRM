@@ -107,6 +107,53 @@ export async function importContacts(db: DB, opts: { source: string; tag?: strin
   return { created: newContacts.length, updated: matched.size, contactIds: [...touched] };
 }
 
+export interface IncomingBirthday {
+  /** YYYY-MM-DD or --MM-DD */
+  birthday: string;
+  identities: { kind: IdentityKind; value: string }[];
+}
+
+/**
+ * Enrich-only: sets birthdays on contacts we already have, matched by identity, for
+ * sources like the Mac address book that shouldn't create people. A blank birthday is
+ * filled; a year-less one gains its year when month and day agree. Nothing else changes.
+ */
+export async function fillBirthdays(db: DB, rows: IncomingBirthday[]) {
+  const prepared = rows.map((row) => ({
+    birthday: row.birthday,
+    identities: dedupeIdentities(row.identities.map((i) => ({ kind: i.kind, value: normalizeIdentity(i.kind, i.value) }))),
+  }));
+  const owners = await lookupIdentityOwners(
+    db,
+    prepared.flatMap((r) => r.identities.map((i) => i.value)),
+  );
+  const phoneOwners = await lookupPhoneOwnersBySuffix(
+    db,
+    prepared.flatMap((r) => r.identities.filter((i) => i.kind === "phone" && !owners.has(`phone:${i.value}`)).map((i) => i.value)),
+  );
+
+  const wanted = new Map<string, string>();
+  for (const row of prepared) {
+    const contactId =
+      row.identities.map((i) => owners.get(`${i.kind}:${i.value}`)).find(Boolean) ??
+      row.identities.filter((i) => i.kind === "phone").map((i) => phoneOwners.get(phoneSuffix(i.value) ?? "")).find(Boolean);
+    if (contactId && !wanted.has(contactId)) wanted.set(contactId, row.birthday);
+  }
+
+  let updated = 0;
+  for (const ids of chunk([...wanted.keys()], 90)) {
+    const existing = await db.select({ id: contacts.id, birthday: contacts.birthday }).from(contacts).where(inArray(contacts.id, ids));
+    for (const current of existing) {
+      const incoming = wanted.get(current.id)!;
+      const addsYear = current.birthday?.startsWith("--") && !incoming.startsWith("-") && incoming.slice(4) === current.birthday.slice(1);
+      if (current.birthday && !addsYear) continue;
+      await db.update(contacts).set({ birthday: incoming }).where(eq(contacts.id, current.id));
+      updated++;
+    }
+  }
+  return { matched: wanted.size, updated };
+}
+
 export interface Participant {
   kind: IdentityKind;
   value: string;

@@ -10,9 +10,10 @@
     "skipLibCheck": true,
     "noEmit": true,
     "isolatedModules": true,
+    "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "resolveJsonModule": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["src", "server", "connector", "vite.config.ts", "drizzle.config.ts"]
+  "include": ["src", "server", "connector", "test", "vite.config.ts", "drizzle.config.ts"]
 }

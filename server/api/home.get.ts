@@ -1,10 +1,12 @@
 import { and, asc, count, eq, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { defineHandler } from "nitro/h3";
 import { contacts, interactions, reminders } from "../db/schema";
+import { birthdayOccurrences, daysUntilBirthday } from "../utils/birthdays";
 import { listContacts, listInteractions, sourceColumns, withSources } from "../utils/contacts";
 import { useDb } from "../utils/db";
 
 const DAY_MS = 86_400_000;
+const RECENT_LIMIT = 10;
 
 export default defineHandler(async (event) => {
   const db = await useDb(event);
@@ -12,7 +14,7 @@ export default defineHandler(async (event) => {
 
   const [reconnect, recent, dueReminders, birthdayRows, [stats]] = await Promise.all([
     listContacts(db, { filter: "reconnect", limit: 12 }),
-    listInteractions(db, { limit: 10 }),
+    listInteractions(db, { limit: RECENT_LIMIT }),
     db.query.reminders.findMany({
       where: and(isNull(reminders.completedAt), lte(reminders.dueAt, new Date(now + 7 * DAY_MS))),
       orderBy: [asc(reminders.dueAt)],
@@ -38,15 +40,18 @@ export default defineHandler(async (event) => {
     .filter((c) => c.inDays !== null && c.inDays <= 30)
     .sort((a, b) => a.inDays! - b.inDays!);
 
-  return { reconnect, recent, reminders: dueReminders, birthdays, stats };
-});
+  // Birthdays that passed within the span "recent" covers, so the activity feed shows them in place.
+  // Upcoming ones are in `birthdays` already.
+  const from = recent.length === RECENT_LIMIT ? recent.at(-1)!.occurredAt : new Date(now - 30 * DAY_MS);
+  const today = new Date(now);
+  const todayKey = today.toISOString().slice(0, 10);
+  const birthdayEvents = birthdayRows
+    .flatMap((c) =>
+      birthdayOccurrences(c.birthday!, { from, today })
+        .filter((o) => o.date <= todayKey)
+        .map((o) => ({ ...o, contact: { id: c.id, name: c.name, avatarUrl: c.avatarUrl } })),
+    )
+    .sort((a, b) => b.date.localeCompare(a.date));
 
-function daysUntilBirthday(birthday: string, today: Date): number | null {
-  const match = birthday.match(/-(\d{2})-(\d{2})$/);
-  if (!match) return null;
-  const [month, day] = [Number(match[1]) - 1, Number(match[2])];
-  const start = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
-  let next = Date.UTC(today.getUTCFullYear(), month, day);
-  if (next < start) next = Date.UTC(today.getUTCFullYear() + 1, month, day);
-  return Math.round((next - start) / DAY_MS);
-}
+  return { reconnect, recent, reminders: dueReminders, birthdays, birthdayEvents, stats };
+});

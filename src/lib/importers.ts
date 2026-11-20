@@ -1,3 +1,4 @@
+import { normalizeBirthday } from "../../server/utils/birthdays";
 import { csvToRecords } from "../../server/utils/csv";
 import type { ImportContact } from "./api";
 
@@ -100,7 +101,7 @@ function fromGeneric(r: Record<string, string>): ImportContact | null {
     title: get(/^(job ?)?title|position|role/i),
     location: get(/location|city/i),
     about: get(/notes?|about|bio/i),
-    birthday: normalizeBirthday(get(/birthday|birth ?date|dob/i) ?? undefined),
+    birthday: normalizeBirthday(get(/birthday|birth ?date|date of birth|dob/i)),
     identities: [
       ...(email ? [{ kind: "email" as const, value: email }] : []),
       ...(phone ? [{ kind: "phone" as const, value: phone }] : []),
@@ -114,11 +115,4 @@ function join(...parts: (string | undefined | null)[]) {
     .map((p) => p?.trim())
     .filter(Boolean)
     .join(" ");
-}
-
-/** Accepts YYYY-MM-DD and Google's --MM-DD; anything else is dropped. */
-function normalizeBirthday(value: string | undefined): string | null {
-  const v = value?.trim();
-  if (!v) return null;
-  return /^(\d{4}|-)-\d{2}-\d{2}$/.test(v) ? v : null;
 }

@@ -6,6 +6,7 @@ A native SwiftUI client for the same self-hosted backend. It uses the REST API w
 - **Contacts:** search, filters and tags, star and archive, create and edit, merge, delete.
 - **Contact page:** contact details, tags, notes, keep-in-touch status, reminders, a log-interaction composer, and the timeline.
 - **Duplicates:** groups with per-person "Not This Person", match reasons in a popover, and a merge sheet with per-field choices.
+- **Birthdays from Contacts:** reads birthdays from the Contacts app (asks for Contacts access) and adds them to people already in PRM, matched by email or phone. It never creates contacts or changes a birthday you set. Birthdays also appear in the contact and Home timelines.
 - **Calls & WhatsApp:** reads the local call history and WhatsApp store (Full Disk Access) every 30 minutes while the app runs, with the same rules as `connector/mac-sync.ts`. WhatsApp sync is metadata only; message text is never read.
 
 ## Build

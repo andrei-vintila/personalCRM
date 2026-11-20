@@ -1,7 +1,8 @@
+import CryptoKit
 import Foundation
 import Observation
 
-/// Runs local call/WhatsApp sync: on demand, and every 30 minutes while the app is open.
+/// Runs local call/WhatsApp sync and the Contacts birthday sync: on demand, and every 30 minutes while the app is open.
 @MainActor
 @Observable
 final class SyncModel {
@@ -17,6 +18,10 @@ final class SyncModel {
   var statuses: [LocalSource: Status] = [:]
   var isRunning = false
   var fullDiskAccess = hasFullDiskAccess()
+
+  /// Birthdays from the Contacts app; off until switched on, like the other sources.
+  private(set) var birthdaysEnabled = UserDefaults.standard.bool(forKey: "sync.birthdays.enabled")
+  var birthdayStatus = Status(lastRun: UserDefaults.standard.object(forKey: "sync.birthdays.lastRun") as? Date)
 
   var autoSync: Bool {
     didSet { UserDefaults.standard.set(autoSync, forKey: "sync.auto") }
@@ -42,6 +47,17 @@ final class SyncModel {
     UserDefaults.standard.set(on, forKey: "sync.\(source.rawValue).enabled")
   }
 
+  func setBirthdaysEnabled(_ on: Bool, app: AppModel) {
+    birthdaysEnabled = on
+    UserDefaults.standard.set(on, forKey: "sync.birthdays.enabled")
+    guard on else { return }
+    Task {
+      // Shows the macOS prompt the first time, then syncs straight away.
+      _ = await AddressBook.requestAccess()
+      await syncNow(app: app)
+    }
+  }
+
   /// Starts the background loop once; it syncs right away and then on an interval.
   func start(app: AppModel) {
     guard loop == nil else { return }
@@ -54,7 +70,7 @@ final class SyncModel {
   }
 
   func syncNow(app: AppModel) async {
-    guard !isRunning, app.isSignedIn, LocalSource.allCases.contains(where: isEnabled) else { return }
+    guard !isRunning, app.isSignedIn, birthdaysEnabled || LocalSource.allCases.contains(where: isEnabled) else { return }
     isRunning = true
     defer { isRunning = false }
     fullDiskAccess = hasFullDiskAccess()
@@ -99,11 +115,56 @@ final class SyncModel {
       UserDefaults.standard.set(status.lastRun, forKey: "sync.\(source.rawValue).lastRun")
       statuses[source] = status
     }
+    if birthdaysEnabled { await syncBirthdays(app: app) }
     app.changed()
+  }
+
+  /// Sends Contacts birthdays when the address book changed, or once a day so people added
+  /// to the PRM since (by Google sync, calls, ...) pick up their birthdays too.
+  private func syncBirthdays(app: AppModel) async {
+    var status = birthdayStatus
+    defer {
+      status.lastRun = Date()
+      UserDefaults.standard.set(status.lastRun, forKey: "sync.birthdays.lastRun")
+      birthdayStatus = status
+    }
+    guard AddressBook.isAuthorized else {
+      status.error = AddressBook.isDenied
+        ? "Turn on PRM under Privacy & Security → Contacts."
+        : "Contacts access hasn't been granted yet."
+      return
+    }
+    do {
+      let items = try await Task.detached(priority: .utility) { try AddressBook.readBirthdays() }.value
+      let fingerprint = SHA256.hash(data: try JSONEncoder().encode(items)).map { String(format: "%02x", $0) }.joined()
+      let lastPush = UserDefaults.standard.object(forKey: "sync.birthdays.pushedAt") as? Date ?? .distantPast
+      if fingerprint == UserDefaults.standard.string(forKey: "sync.birthdays.fingerprint"), lastPush > Date().addingTimeInterval(-86_400) {
+        status.error = nil
+        status.summary = status.summary ?? "Up to date"
+        return
+      }
+      var updated = 0
+      for start in stride(from: 0, to: items.count, by: 100) {
+        let batch = Array(items[start..<min(start + 100, items.count)])
+        updated += try await app.api.importBirthdays(source: "contacts", items: batch).updated
+      }
+      UserDefaults.standard.set(fingerprint, forKey: "sync.birthdays.fingerprint")
+      UserDefaults.standard.set(Date(), forKey: "sync.birthdays.pushedAt")
+      status.error = nil
+      status.summary = updated > 0
+        ? "\(updated) birthday\(updated == 1 ? "" : "s") added"
+        : "\(items.count) birthday\(items.count == 1 ? "" : "s") checked, nothing new"
+    } catch let error as APIError where error.isUnauthorized {
+      app.signOut()
+      status.error = "Signed out: the API token was revoked."
+    } catch {
+      status.error = error.localizedDescription
+    }
   }
 
   /// Forgets sync progress so the next run re-reads the last 180 days (safe: the server de-duplicates).
   func resetProgress() {
     for source in LocalSource.allCases { UserDefaults.standard.removeObject(forKey: "sync.\(source.rawValue).cursor") }
+    UserDefaults.standard.removeObject(forKey: "sync.birthdays.fingerprint")
   }
 }
