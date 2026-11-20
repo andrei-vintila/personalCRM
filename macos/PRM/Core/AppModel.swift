@@ -92,6 +92,8 @@ final class AppModel {
       errorMessage = "Your session ended (the token may have been revoked). Please sign in again."
       signOut()
     } catch is CancellationError {
+    } catch let error as URLError where error.code == .cancelled {
+      // A view reloaded or went away mid-request; nothing failed.
     } catch {
       errorMessage = error.localizedDescription
     }
