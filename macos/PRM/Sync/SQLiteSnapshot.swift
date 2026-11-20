@@ -91,8 +91,20 @@ final class SQLiteSnapshot {
   }
 }
 
-/// Full Disk Access can't be queried directly; this file is only readable with it.
+/// Full Disk Access can't be queried directly, so this tries to open the databases PRM
+/// actually reads. It must really open them: privacy protection isn't visible to
+/// access(2)/isReadableFile, which only checks Unix permissions. TCC.db is the fallback
+/// when neither source exists, though recent macOS can refuse it even with access.
 func hasFullDiskAccess() -> Bool {
-  let probe = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/com.apple.TCC/TCC.db")
-  return FileManager.default.isReadableFile(atPath: probe.path)
+  let home = FileManager.default.homeDirectoryForCurrentUser
+  let sources = LocalSource.allCases.map(\.databaseURL).filter { FileManager.default.fileExists(atPath: $0.path) }
+  if !sources.isEmpty { return sources.contains(where: canOpen) }
+  return canOpen(home.appending(path: "Library/Application Support/com.apple.TCC/TCC.db"))
+}
+
+private func canOpen(_ url: URL) -> Bool {
+  let fd = open(url.path, O_RDONLY)
+  guard fd >= 0 else { return false }
+  close(fd)
+  return true
 }

@@ -80,6 +80,8 @@ final class SyncModel {
           created += pushed.contactsCreated
         }
         UserDefaults.standard.set(result.lastDate, forKey: cursorKey)
+        // Reading the database at all proves access, whatever the probe said.
+        fullDiskAccess = true
         status.error = nil
         status.summary = result.items.isEmpty
           ? "Up to date"

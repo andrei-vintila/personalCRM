@@ -28,6 +28,8 @@ open build/Build/Products/Release/PRM.app
 
 Without Xcode you can still type-check everything with `./typecheck.sh`.
 
+To install PRM in `/Applications` (and update it after changes), run `./install.sh`. It builds a Release app, quits the running copy and replaces it. Each new build is a new ad-hoc signature, so macOS may ask once to allow Keychain access, and you may need to re-add PRM under Full Disk Access.
+
 For development against a local server, `./dev-run.sh [server] [password]` builds a Debug app and launches it with a fresh token passed in through the environment. Debug builds only; the token stays in memory, never in the Keychain.
 
 ## Sign in
