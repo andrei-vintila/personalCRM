@@ -172,20 +172,25 @@ struct ContactDetailView: View {
   private func timeline(_ c: ContactDetail) -> some View {
     VStack(alignment: .leading, spacing: 8) {
       Text("Timeline").font(.headline)
-      if c.interactions.isEmpty {
+      if c.timeline.isEmpty {
         Text("Nothing logged yet.").foregroundStyle(.secondary).padding(.vertical, 8)
       }
-      ForEach(c.interactions) { interaction in
-        InteractionRow(interaction: interaction, showPeople: false)
-          .padding(.vertical, 4)
-          .contextMenu {
-            Button("Delete", role: .destructive) {
-              Task {
-                await app.run { try await $0.deleteInteraction(interaction.id) }
-                app.changed()
+      ForEach(c.timeline) { entry in
+        switch entry {
+        case .birthday(let birthday):
+          BirthdayRow(birthday: birthday, showPerson: false).padding(.vertical, 4)
+        case .interaction(let interaction):
+          InteractionRow(interaction: interaction, showPeople: false)
+            .padding(.vertical, 4)
+            .contextMenu {
+              Button("Delete", role: .destructive) {
+                Task {
+                  await app.run { try await $0.deleteInteraction(interaction.id) }
+                  app.changed()
+                }
               }
             }
-          }
+        }
         Divider()
       }
     }
@@ -221,6 +226,48 @@ struct InteractionRow: View {
         if let body = interaction.body, !body.isEmpty {
           Text(body).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
         }
+      }
+    }
+  }
+}
+
+struct BirthdayRow: View {
+  let birthday: BirthdayEvent
+  var showPerson: Bool
+
+  private var title: String {
+    let days = birthday.daysFromToday
+    let name = showPerson ? birthday.contact?.name : nil
+    if let age = birthday.age {
+      let verb = days >= 0 ? "turns" : "turned"
+      let text = "\(name.map { "\($0) " } ?? "")\(verb) \(age)\(days == 0 ? " today" : "")"
+      return name == nil ? text.prefix(1).uppercased() + text.dropFirst() : text
+    }
+    if let name { return "\(name)’s birthday\(days == 0 ? " is today" : "")" }
+    return days == 0 ? "Birthday today" : "Birthday"
+  }
+
+  private var when: String {
+    let days = birthday.daysFromToday
+    if days == 0 { return "today" }
+    if abs(days) < 30 {
+      return RelativeDateTimeFormatter().localizedString(from: DateComponents(day: days))
+    }
+    return birthday.day.formatted(date: .abbreviated, time: .omitted)
+  }
+
+  var body: some View {
+    HStack(alignment: .top, spacing: 10) {
+      Image(systemName: "gift")
+        .frame(width: 26, height: 26)
+        .background(Color.accentColor.opacity(0.15), in: Circle())
+        .foregroundStyle(.tint)
+      VStack(alignment: .leading, spacing: 2) {
+        Text(title).fontWeight(.medium).lineLimit(1)
+        Text(birthday.daysFromToday > 0 ? "\(when) · upcoming" : when)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .help(birthday.day.formatted(date: .complete, time: .omitted))
       }
     }
   }

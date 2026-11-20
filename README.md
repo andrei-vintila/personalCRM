@@ -65,6 +65,18 @@ Detection is a background job; viewing duplicates only reads stored results (`du
 
 A lock row in `jobs` keeps it to one scan at a time; a claim older than 10 minutes is treated as dead. The best 500 pairs are stored and replaced in one transaction. A scan takes about 20 ms at 2,000 contacts and a few hundred ms at 20k, which can exceed the Workers free plan's 10 ms CPU limit for large lists.
 
+## Birthdays
+
+Birthdays are collected from every source that has them:
+
+- **Google Contacts** sync, and the **Google CSV** export on the Import page.
+- **Any CSV** with a birthday, birth date or DOB column. ISO dates, `--MM-DD`, `21.04.1990`, `April 21, 1990`, `21 Apr` and slashed dates all work. A slashed date like `04/05/1990` could be either order, so it's skipped.
+- **Apple Contacts**, through the Mac app (**Calls & WhatsApp → Birthdays from Contacts**). This only adds birthdays to people already in PRM, matched by email or phone; it never creates contacts.
+
+Nothing overwrites a birthday you already have, except that a birthday without a year gets the year when a source has the same day with one. LinkedIn's export has no birthdays.
+
+Each contact's timeline shows their birthdays alongside interactions: past ones back to the oldest entry (at least a year, at most ten), with the age when the year is known, and the next one at the top. Home lists birthdays in the next 30 days, and **Recent activity** shows ones that just passed.
+
 ## Google sync
 
 Connect a Google account under **Settings** to pull in:

@@ -163,6 +163,16 @@ struct APIClient: Sendable {
     let contactsCreated: Int
   }
 
+  struct BirthdayImportResult: Decodable, Sendable {
+    let matched: Int
+    let updated: Int
+  }
+
+  func importBirthdays(source: String, items: [AddressBookBirthday]) async throws -> BirthdayImportResult {
+    struct Body: Encodable { let source: String; let items: [AddressBookBirthday] }
+    return try await send("POST", "/import/birthdays", body: Body(source: source, items: items))
+  }
+
   func importInteractions(source: String, items: [LocalInteraction]) async throws -> ImportResult {
     struct Body: Encodable { let source: String; let items: [LocalInteraction] }
     return try await send("POST", "/import/interactions", body: Body(source: source, items: items))

@@ -7,6 +7,7 @@ import { Avatar, Badge, Card, CardHeader, Empty } from "../components/ui";
 import { ReminderRow } from "./Reminders";
 import { InteractionRow } from "./ContactDetail";
 import { SourceIcons } from "../components/SourceIcons";
+import { BirthdayRow, mergeTimeline } from "../components/BirthdayRow";
 
 export function HomePage() {
   const { data } = useQuery({ queryKey: ["home"], queryFn: () => api<HomeData>("/home") });
@@ -98,13 +99,17 @@ export function HomePage() {
 
       <Card>
         <CardHeader title="Recent activity" icon={<History className="size-4 text-accent-600" />} />
-        {data.recent.length === 0 ? (
+        {data.recent.length === 0 && data.birthdayEvents.length === 0 ? (
           <Empty>Log a note, call or meeting on a contact to build your timeline.</Empty>
         ) : (
           <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {data.recent.map((i) => (
-              <InteractionRow key={i.id} interaction={i} showContacts />
-            ))}
+            {mergeTimeline(data.recent, data.birthdayEvents).map((entry) =>
+              entry.kind === "birthday" ? (
+                <BirthdayRow key={`birthday:${entry.birthday.contact!.id}:${entry.birthday.date}`} birthday={entry.birthday} showContact />
+              ) : (
+                <InteractionRow key={entry.interaction.id} interaction={entry.interaction} showContacts />
+              ),
+            )}
           </ul>
         )}
       </Card>

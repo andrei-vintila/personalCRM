@@ -22,6 +22,8 @@ export interface HomeData {
   recent: InteractionItem[];
   reminders: ReminderItem[];
   birthdays: { id: string; name: string; avatarUrl: string | null; birthday: string; inDays: number; sources: string[] }[];
+  /** Birthdays that passed within the span `recent` covers */
+  birthdayEvents: { date: string; age: number | null; contact: { id: string; name: string; avatarUrl: string | null } }[];
   stats: { contacts: number; tracked: number | null; interactionsLast30: number };
 }
 

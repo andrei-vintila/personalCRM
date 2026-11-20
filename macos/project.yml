@@ -22,6 +22,7 @@ targets:
         CFBundleDisplayName: PRM
         LSApplicationCategoryType: public.app-category.productivity
         NSHumanReadableCopyright: ""
+        NSContactsUsageDescription: PRM reads birthdays from Contacts to add them to people you already have.
         # Plain-HTTP servers (e.g. http://localhost during development) are allowed.
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
@@ -31,6 +32,8 @@ targets:
         # Not sandboxed: reading call history and WhatsApp needs Full Disk Access,
         # which sandboxed apps can't get. Distribute outside the App Store.
         com.apple.security.app-sandbox: false
+        # Hardened runtime: needed to read birthdays from Contacts.
+        com.apple.security.personal-information.addressbook: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.prm.mac

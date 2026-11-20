@@ -28,6 +28,7 @@ import { Avatar, Badge, Button, Card, CardHeader, Empty, ErrorText, Input, Selec
 import { ContactFormDialog } from "../components/ContactForm";
 import { MergeWithDialog } from "../components/MergeDialog";
 import { SourceIcons } from "../components/SourceIcons";
+import { BirthdayRow, mergeTimeline } from "../components/BirthdayRow";
 import { ReminderRow } from "./Reminders";
 
 const interactionMeta: Record<InteractionType, { label: string; icon: typeof StickyNote }> = {
@@ -165,13 +166,17 @@ export function ContactDetailPage() {
           <LogInteraction contactId={c.id} />
           <Card>
             <CardHeader title="Timeline" />
-            {c.interactions.length === 0 ? (
+            {c.interactions.length === 0 && c.birthdays.length === 0 ? (
               <Empty>Nothing logged yet.</Empty>
             ) : (
               <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {c.interactions.map((i) => (
-                  <InteractionRow key={i.id} interaction={i} onChange={invalidate} />
-                ))}
+                {mergeTimeline(c.interactions, c.birthdays).map((entry) =>
+                  entry.kind === "birthday" ? (
+                    <BirthdayRow key={`birthday:${entry.birthday.date}`} birthday={entry.birthday} />
+                  ) : (
+                    <InteractionRow key={entry.interaction.id} interaction={entry.interaction} onChange={invalidate} />
+                  ),
+                )}
               </ul>
             )}
           </Card>

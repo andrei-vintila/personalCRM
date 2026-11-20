@@ -105,6 +105,19 @@ export const importInteractionsSchema = z.object({
     .max(25),
 });
 
+export const importBirthdaysSchema = z.object({
+  source: z.string().trim().min(1).max(40),
+  items: z
+    .array(
+      z.object({
+        birthday: z.string().regex(/^(\d{4}|-)-\d{2}-\d{2}$/, "Use YYYY-MM-DD or --MM-DD"),
+        identities: z.array(identitySchema.pick({ kind: true, value: true })).min(1).max(20),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
+
 export const mergeSchema = z.object({
   sourceIds: z.array(z.string().min(1)).min(1).max(20),
   /** Explicit picks for conflicting fields; omitted fields keep the target's value. */

@@ -51,9 +51,14 @@ struct HomeView: View {
         }
 
         Section("Recent activity") {
-          if data.recent.isEmpty { Text("Nothing logged yet.").foregroundStyle(.secondary) }
-          ForEach(data.recent) { i in
-            InteractionRow(interaction: i, showPeople: true).tag(i.contacts.first?.id ?? "interaction-\(i.id)")
+          if data.timeline.isEmpty { Text("Nothing logged yet.").foregroundStyle(.secondary) }
+          ForEach(data.timeline) { entry in
+            switch entry {
+            case .birthday(let b):
+              BirthdayRow(birthday: b, showPerson: true).tag(b.contact?.id ?? entry.id)
+            case .interaction(let i):
+              InteractionRow(interaction: i, showPeople: true).tag(i.contacts.first?.id ?? "interaction-\(i.id)")
+            }
           }
         }
       }

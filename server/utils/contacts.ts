@@ -11,6 +11,7 @@ import {
   type IdentityKind,
   type InteractionType,
 } from "../db/schema";
+import { birthdayOccurrences } from "./birthdays";
 import { chunk, insertChunks, type DB } from "./db";
 import { normalizeIdentity } from "./identity";
 
@@ -147,8 +148,19 @@ export async function getContactDetail(db: DB, id: string) {
     ...withSources(rest),
     tags: contactTagRows.map((t) => t.tag.name).sort(),
     interactions: timeline,
+    birthdays: contact.birthday ? timelineBirthdays(contact.birthday, timeline.at(-1)?.occurredAt) : [],
     dueAt: dueAt(contact),
   };
+}
+
+/**
+ * Birthdays to show among a contact's timeline entries: each one back to the oldest
+ * entry (at least a year, at most ten), plus the next one coming up.
+ */
+function timelineBirthdays(birthday: string, oldest: Date | undefined) {
+  const now = Date.now();
+  const from = Math.max(Math.min(oldest?.getTime() ?? now, now - 365 * DAY_MS), now - 3650 * DAY_MS);
+  return birthdayOccurrences(birthday, { from: new Date(from), today: new Date(now) });
 }
 
 export async function listInteractions(
